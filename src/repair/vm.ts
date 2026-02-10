@@ -58,11 +58,11 @@ export function repairVmProcess(tenant: Tenant, config: LobsterdConfig): ResultA
     .andThen(() => fc.startInstance(tenant.socketPath))
     .andThen(() => {
       actions.push('VM started successfully');
-      return vsock.waitForAgent(tenant.cid, config.vsock.agentPort, config.vsock.connectTimeoutMs);
+      return vsock.waitForAgent(tenant.ipAddress, config.vsock.agentPort, config.vsock.connectTimeoutMs);
     })
     .andThen(() => {
       actions.push('Guest agent responded');
-      return vsock.injectSecrets(tenant.cid, config.vsock.agentPort, {
+      return vsock.injectSecrets(tenant.ipAddress, config.vsock.agentPort, {
         OPENCLAW_GATEWAY_TOKEN: tenant.gatewayToken,
         OPENCLAW_CONFIG: JSON.stringify(config.openclaw.defaultConfig),
       });
@@ -82,15 +82,15 @@ export function repairVmProcess(tenant: Tenant, config: LobsterdConfig): ResultA
 }
 
 export function repairVmResponsive(tenant: Tenant, config: LobsterdConfig): ResultAsync<RepairResult, LobsterError> {
-  // Re-inject secrets if vsock unresponsive
-  return vsock.injectSecrets(tenant.cid, config.vsock.agentPort, {
+  // Re-inject secrets if agent unresponsive
+  return vsock.injectSecrets(tenant.ipAddress, config.vsock.agentPort, {
     OPENCLAW_GATEWAY_TOKEN: tenant.gatewayToken,
     OPENCLAW_CONFIG: JSON.stringify(config.openclaw.defaultConfig),
   })
     .map((): RepairResult => ({
       repair: 'vm.responsive',
       fixed: true,
-      actions: ['Re-injected secrets via vsock'],
+      actions: ['Re-injected secrets via TCP'],
     }))
     .orElse(() =>
       okAsync<RepairResult, LobsterError>({

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // lobster-agent.mjs — In-VM agent for lobsterd Firecracker microVMs
-// Listens on vsock for host commands: inject-secrets, health-ping, launch-openclaw, shutdown
+// Listens on TCP for host commands: inject-secrets, health-ping, launch-openclaw, shutdown
 
 import { createServer } from 'net';
 import { spawn } from 'child_process';
@@ -12,8 +12,6 @@ const HEALTH_PORT = 53;
 let gatewayProcess = null;
 let secrets = {};
 
-// vsock listener using socat bridge (AF_VSOCK requires native support)
-// The agent listens on a UNIX socket and socat bridges vsock to it
 function startAgent() {
   const server = createServer((conn) => {
     let data = '';
@@ -32,13 +30,8 @@ function startAgent() {
     });
   });
 
-  server.listen(`/tmp/lobster-agent.sock`, () => {
-    console.log(`[lobster-agent] Listening on /tmp/lobster-agent.sock`);
-    // Start socat bridge: vsock -> unix socket
-    spawn('socat', [
-      `VSOCK-LISTEN:${VSOCK_PORT},reuseaddr,fork`,
-      'UNIX-CONNECT:/tmp/lobster-agent.sock',
-    ], { stdio: 'inherit' });
+  server.listen(VSOCK_PORT, '0.0.0.0', () => {
+    console.log(`[lobster-agent] Listening on 0.0.0.0:${VSOCK_PORT}`);
   });
 
   // Health ping listener on separate port
@@ -51,12 +44,8 @@ function startAgent() {
     });
   });
 
-  healthServer.listen('/tmp/lobster-health.sock', () => {
-    console.log(`[lobster-agent] Health listener on /tmp/lobster-health.sock`);
-    spawn('socat', [
-      `VSOCK-LISTEN:${HEALTH_PORT},reuseaddr,fork`,
-      'UNIX-CONNECT:/tmp/lobster-health.sock',
-    ], { stdio: 'inherit' });
+  healthServer.listen(HEALTH_PORT, '0.0.0.0', () => {
+    console.log(`[lobster-agent] Health listener on 0.0.0.0:${HEALTH_PORT}`);
   });
 }
 

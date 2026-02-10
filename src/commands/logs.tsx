@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { render, useApp, useInput } from 'ink';
 import type { Tenant } from '../types/index.js';
-import { loadConfig, loadRegistry } from '../config/loader.js';
-import * as vsock from '../system/vsock.js';
+import { loadRegistry } from '../config/loader.js';
 import { LogStream } from '../ui/LogStream.js';
 
 function LogsApp({ tenant }: { tenant: Tenant }) {

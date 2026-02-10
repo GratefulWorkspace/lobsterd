@@ -1,5 +1,5 @@
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
-import { chmodSync } from 'node:fs';
+import { accessSync, chmodSync, constants as fsConstants } from 'node:fs';
 import type { LobsterError, LobsterdConfig } from '../types/index.js';
 import { exec, execUnchecked } from '../system/exec.js';
 import * as network from '../system/network.js';
@@ -26,8 +26,9 @@ function checkRoot(): ResultAsync<void, LobsterError> {
 function checkKvm(): ResultAsync<void, LobsterError> {
   return ResultAsync.fromPromise(
     (async () => {
-      const devKvm = Bun.file('/dev/kvm');
-      if (!(await devKvm.exists())) {
+      try {
+        accessSync('/dev/kvm', fsConstants.R_OK | fsConstants.W_OK);
+      } catch {
         throw new Error('/dev/kvm not found — KVM not available. Enable hardware virtualization in BIOS.');
       }
     })(),
@@ -145,8 +146,10 @@ export function runInit(config: LobsterdConfig = DEFAULT_CONFIG): ResultAsync<In
     .andThen(() => checkKvm())
     .andThen(() => {
       result.kvmAvailable = true;
-      return checkFirecracker(config);
+      // Load vhost_vsock module (best-effort, not required for TCP-based agent)
+      return execUnchecked(['modprobe', 'vhost_vsock']).orElse(() => okAsync({ exitCode: 0, stdout: '', stderr: '' }));
     })
+    .andThen(() => checkFirecracker(config))
     .andThen(() => {
       result.firecrackerFound = true;
       return checkKernel(config);

@@ -1,23 +1,67 @@
 import { ResultAsync } from 'neverthrow';
+import { Socket } from 'net';
 import type { LobsterError } from '../types/index.js';
-import { execUnchecked } from './exec.js';
 
-export function waitForAgent(cid: number, port: number, timeoutMs: number): ResultAsync<void, LobsterError> {
+function tcpSend(host: string, port: number, payload: string, timeoutMs: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const socket = new Socket();
+    let response = '';
+    const timer = setTimeout(() => {
+      socket.destroy();
+      reject(new Error(`TCP connection to ${host}:${port} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    socket.connect(port, host, () => {
+      socket.write(payload);
+      socket.end();
+    });
+    socket.on('data', (chunk) => { response += chunk.toString(); });
+    socket.on('end', () => {
+      clearTimeout(timer);
+      resolve(response);
+    });
+    socket.on('error', (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+  });
+}
+
+function tcpConnect(host: string, port: number, timeoutMs: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const socket = new Socket();
+    const timer = setTimeout(() => {
+      socket.destroy();
+      reject(new Error('timeout'));
+    }, timeoutMs);
+
+    socket.connect(port, host, () => {
+      clearTimeout(timer);
+      socket.end();
+      resolve();
+    });
+    socket.on('error', (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+  });
+}
+
+export function waitForAgent(guestIp: string, port: number, timeoutMs: number): ResultAsync<void, LobsterError> {
   return ResultAsync.fromPromise(
     (async () => {
       const start = Date.now();
       const pollMs = 500;
       while (Date.now() - start < timeoutMs) {
-        const result = await execUnchecked([
-          'socat', '-T1', '-',
-          `VSOCK-CONNECT:${cid}:${port}`,
-        ], { timeout: 3000 });
-        if (result.isOk() && result.value.exitCode === 0) {
+        try {
+          await tcpConnect(guestIp, port, 3000);
           return;
+        } catch {
+          // Agent not ready yet
         }
         await Bun.sleep(pollMs);
       }
-      throw new Error(`Agent on CID ${cid}:${port} did not respond within ${timeoutMs}ms`);
+      throw new Error(`Agent on ${guestIp}:${port} did not respond within ${timeoutMs}ms`);
     })(),
     (e) => ({
       code: 'VSOCK_CONNECT_FAILED' as const,
@@ -28,24 +72,16 @@ export function waitForAgent(cid: number, port: number, timeoutMs: number): Resu
 }
 
 export function injectSecrets(
-  cid: number,
+  guestIp: string,
   port: number,
   secrets: Record<string, string>,
 ): ResultAsync<void, LobsterError> {
   const payload = JSON.stringify({ type: 'inject-secrets', secrets });
   return ResultAsync.fromPromise(
     (async () => {
-      const proc = Bun.spawn(['socat', '-T5', '-', `VSOCK-CONNECT:${cid}:${port}`], {
-        stdin: 'pipe',
-        stdout: 'pipe',
-        stderr: 'pipe',
-      });
-      proc.stdin.write(payload + '\n');
-      proc.stdin.end();
-      const exitCode = await proc.exited;
-      const stdout = await new Response(proc.stdout).text();
-      if (exitCode !== 0 || !stdout.includes('ACK')) {
-        throw new Error(`Secret injection failed (exit ${exitCode}): ${stdout}`);
+      const response = await tcpSend(guestIp, port, payload + '\n', 5000);
+      if (!response.includes('ACK')) {
+        throw new Error(`Secret injection failed: ${response}`);
       }
     })(),
     (e) => ({
@@ -56,26 +92,16 @@ export function injectSecrets(
   );
 }
 
-export function healthPing(cid: number, port: number): ResultAsync<boolean, LobsterError> {
+export function healthPing(guestIp: string, port: number): ResultAsync<boolean, LobsterError> {
   const payload = JSON.stringify({ type: 'health-ping' });
   return ResultAsync.fromPromise(
     (async () => {
-      const proc = Bun.spawn(['socat', '-T3', '-', `VSOCK-CONNECT:${cid}:${port}`], {
-        stdin: 'pipe',
-        stdout: 'pipe',
-        stderr: 'pipe',
-      });
-      proc.stdin.write(payload + '\n');
-      proc.stdin.end();
-      const timer = setTimeout(() => proc.kill(), 5000);
-      const exitCode = await proc.exited;
-      clearTimeout(timer);
-      const stdout = await new Response(proc.stdout).text();
-      return exitCode === 0 && stdout.includes('PONG');
+      const response = await tcpSend(guestIp, port, payload + '\n', 5000);
+      return response.includes('PONG');
     })(),
     () => ({
       code: 'VSOCK_CONNECT_FAILED' as const,
-      message: `Health ping failed for CID ${cid}`,
+      message: `Health ping failed for ${guestIp}`,
     }),
   );
 }

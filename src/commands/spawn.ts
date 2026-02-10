@@ -175,6 +175,7 @@ export function runSpawn(
         'reboot=k',
         'panic=1',
         'pci=off',
+        'init=/sbin/overlay-init',
         `ip=${tenant.ipAddress}::${tenant.hostIp}:255.255.255.252::eth0:off`,
       ].join(' ');
       progress('boot-source', 'Setting boot source');
@@ -201,13 +202,13 @@ export function runSpawn(
       tenant.vmPid = vmProcPid;
 
       // Step 6: Wait for guest agent
-      progress('agent', 'Waiting for guest agent to respond on vsock');
-      return vsock.waitForAgent(tenant.cid, config.vsock.agentPort, config.vsock.connectTimeoutMs);
+      progress('agent', 'Waiting for guest agent to respond on TCP');
+      return vsock.waitForAgent(tenant.ipAddress, config.vsock.agentPort, config.vsock.connectTimeoutMs);
     })
     .andThen(() => {
       // Step 7: Inject secrets
       progress('secrets', 'Injecting API keys and gateway token');
-      return vsock.injectSecrets(tenant.cid, config.vsock.agentPort, {
+      return vsock.injectSecrets(tenant.ipAddress, config.vsock.agentPort, {
         OPENCLAW_GATEWAY_TOKEN: tenant.gatewayToken,
         OPENCLAW_CONFIG: JSON.stringify(config.openclaw.defaultConfig),
       });

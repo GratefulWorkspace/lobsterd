@@ -19,7 +19,7 @@ export function checkVmProcess(tenant: Tenant): ResultAsync<HealthCheckResult, L
 }
 
 export function checkVmResponsive(tenant: Tenant): ResultAsync<HealthCheckResult, LobsterError> {
-  return vsock.healthPing(tenant.cid, 53)
+  return vsock.healthPing(tenant.ipAddress, 53)
     .map((ok): HealthCheckResult =>
       ok
         ? { check: 'vm.responsive', status: 'ok', message: 'Guest agent responded to health ping' }
@@ -29,7 +29,7 @@ export function checkVmResponsive(tenant: Tenant): ResultAsync<HealthCheckResult
       okAsync<HealthCheckResult, LobsterError>({
         check: 'vm.responsive',
         status: 'failed',
-        message: 'Could not reach guest agent via vsock',
+        message: 'Could not reach guest agent via TCP',
       }),
     );
 }
