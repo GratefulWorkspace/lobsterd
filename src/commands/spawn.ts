@@ -94,13 +94,20 @@ export function runSpawn(
       progress('gateway-service', 'Creating OpenClaw gateway service');
       const serviceContent = `[Unit]
 Description=OpenClaw Gateway for ${name}
-After=docker.service
+After=network-online.target docker.service
+Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=${config.openclaw.installPath}/bin/openclaw-gateway --port ${tenant.gatewayPort} --config ${tenant.homePath}/.openclaw/config.json
+Environment=HOME=${tenant.homePath}
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=XDG_RUNTIME_DIR=/run/user/${tenant.uid}
+Environment=DOCKER_HOST=unix:///run/user/${tenant.uid}/docker.sock
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/env node ${config.openclaw.installPath}/openclaw.mjs gateway --port ${tenant.gatewayPort} --allow-unconfigured
 Restart=on-failure
 RestartSec=5
+KillMode=process
 
 [Install]
 WantedBy=default.target
@@ -119,12 +126,14 @@ WantedBy=default.target
       progress('openclaw-config', 'Writing OpenClaw config');
       const openclawConf = {
         ...config.openclaw.defaultConfig,
-        port: tenant.gatewayPort,
-        tenant: tenant.name,
+        gateway: {
+          mode: 'local',
+          ...(config.openclaw.defaultConfig?.gateway as Record<string, unknown> ?? {}),
+        },
       };
       return ResultAsync.fromPromise(
         (async () => {
-          const confPath = `${tenant.homePath}/.openclaw/config.json`;
+          const confPath = `${tenant.homePath}/.openclaw/openclaw.json`;
           await Bun.write(confPath, JSON.stringify(openclawConf, null, 2) + '\n');
           await exec(['chown', `${tenant.uid}:${tenant.gid}`, confPath]);
         })(),
@@ -133,7 +142,8 @@ WantedBy=default.target
     })
     .andThen(() => {
       progress('services', 'Enabling and starting services');
-      return systemd.enableService('docker', name, tenant.uid)
+      return systemd.daemonReload(name, tenant.uid)
+        .andThen(() => systemd.enableService('docker', name, tenant.uid))
         .andThen(() => systemd.startService('docker', name, tenant.uid))
         .andThen(() => systemd.enableService('openclaw-gateway', name, tenant.uid))
         .andThen(() => systemd.startService('openclaw-gateway', name, tenant.uid));

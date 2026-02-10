@@ -72,6 +72,16 @@ export function isFailed(
   ).map((r) => r.stdout.trim() === 'failed');
 }
 
+export function daemonReload(
+  username: string,
+  uid: number,
+): ResultAsync<void, LobsterError> {
+  return exec(
+    ['systemctl', '--user', 'daemon-reload'],
+    { asUser: username, env: userEnv(uid) },
+  ).map(() => undefined);
+}
+
 export function resetFailed(
   unit: string,
   username: string,
