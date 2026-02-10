@@ -75,6 +75,10 @@ export function runSpawn(
       return user.enableLinger(name);
     })
     .andThen(() => {
+      progress('session', 'Waiting for user systemd session');
+      return user.waitForUserSession(tenant.uid);
+    })
+    .andThen(() => {
       progress('dirs', 'Creating .config and .local directories');
       return exec(['sudo', '-u', name, '--', 'mkdir', '-p',
         `${tenant.homePath}/.config`,

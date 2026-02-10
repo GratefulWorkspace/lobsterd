@@ -48,6 +48,22 @@ export function enableLinger(name: string): ResultAsync<void, LobsterError> {
   return exec(['loginctl', 'enable-linger', name]).map(() => undefined);
 }
 
+export function waitForUserSession(uid: number, timeoutMs: number = 10_000): ResultAsync<void, LobsterError> {
+  const runtimeDir = `/run/user/${uid}`;
+  return ResultAsync.fromPromise(
+    (async () => {
+      const { existsSync } = await import('node:fs');
+      const start = Date.now();
+      while (Date.now() - start < timeoutMs) {
+        if (existsSync(`${runtimeDir}/systemd`)) return;
+        await Bun.sleep(200);
+      }
+      throw new Error(`User session for uid ${uid} did not appear within ${timeoutMs}ms`);
+    })(),
+    (e) => ({ code: 'SESSION_TIMEOUT' as const, message: String(e instanceof Error ? e.message : e) }),
+  );
+}
+
 export function disableLinger(name: string): ResultAsync<void, LobsterError> {
   return exec(['loginctl', 'disable-linger', name]).map(() => undefined);
 }
