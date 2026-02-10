@@ -11,6 +11,7 @@ export interface Tenant {
   homePath: string;
   createdAt: string;
   status: TenantStatus;
+  gatewayToken?: string;
 }
 
 // ── Health ───────────────────────────────────────────────────────────────────
@@ -66,6 +67,7 @@ export interface WatchdogConfig {
 export interface OpenclawConfig {
   installPath: string;
   defaultConfig: Record<string, unknown>;
+  apiKeys?: Record<string, string>;
 }
 
 export interface LobsterdConfig {

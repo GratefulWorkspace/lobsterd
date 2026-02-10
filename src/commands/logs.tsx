@@ -65,6 +65,23 @@ export async function runLogs(
     return 1;
   }
 
+  if (!process.stdin.isTTY) {
+    const proc = systemd.streamLogs(service, tenant.name, tenant.uid);
+    const reader = (proc.stdout as ReadableStream).getReader();
+    const decoder = new TextDecoder();
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        process.stdout.write(decoder.decode(value));
+      }
+    } catch {
+      // Stream ended
+    }
+    proc.kill();
+    return 0;
+  }
+
   const { waitUntilExit } = render(
     <LogsApp tenant={tenant} service={service} />,
   );

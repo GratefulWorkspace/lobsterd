@@ -92,6 +92,8 @@ export function runSpawn(
     })
     .andThen(() => {
       progress('gateway-service', 'Creating OpenClaw gateway service');
+      const token = crypto.randomUUID();
+      tenant.gatewayToken = token;
       const serviceContent = `[Unit]
 Description=OpenClaw Gateway for ${name}
 After=network-online.target docker.service
@@ -104,7 +106,9 @@ Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=XDG_RUNTIME_DIR=/run/user/${tenant.uid}
 Environment=DOCKER_HOST=unix:///run/user/${tenant.uid}/docker.sock
 Environment=NODE_ENV=production
-ExecStart=/usr/bin/env node ${config.openclaw.installPath}/openclaw.mjs gateway --port ${tenant.gatewayPort} --allow-unconfigured
+Environment=OPENCLAW_GATEWAY_TOKEN=${token}
+${Object.entries(config.openclaw.apiKeys ?? {}).map(([p, k]) => `Environment=${p.toUpperCase()}_API_KEY=${k}`).join('\n')}
+ExecStart=/usr/bin/env node ${config.openclaw.installPath}/openclaw.mjs gateway --port ${tenant.gatewayPort} --auth token --bind lan --allow-unconfigured
 Restart=on-failure
 RestartSec=5
 KillMode=process
@@ -124,13 +128,29 @@ WantedBy=default.target
     })
     .andThen(() => {
       progress('openclaw-config', 'Writing OpenClaw config');
-      const openclawConf = {
+      const openclawConf: Record<string, unknown> = {
         ...config.openclaw.defaultConfig,
         gateway: {
           mode: 'local',
+          tls: { enabled: true },
+          auth: { token: tenant.gatewayToken },
+          controlUi: { dangerouslyDisableDeviceAuth: true },
           ...(config.openclaw.defaultConfig?.gateway as Record<string, unknown> ?? {}),
         },
       };
+      // Inject API keys into matching provider configs
+      const apiKeys = config.openclaw.apiKeys;
+      if (apiKeys) {
+        const providers = (openclawConf.models as Record<string, unknown> | undefined)
+          ?.providers as Record<string, Record<string, unknown>> | undefined;
+        if (providers) {
+          for (const [providerName, key] of Object.entries(apiKeys)) {
+            if (providers[providerName] && !providers[providerName].apiKey) {
+              providers[providerName].apiKey = key;
+            }
+          }
+        }
+      }
       return ResultAsync.fromPromise(
         (async () => {
           const confPath = `${tenant.homePath}/.openclaw/openclaw.json`;
@@ -138,6 +158,31 @@ WantedBy=default.target
           await exec(['chown', `${tenant.uid}:${tenant.gid}`, confPath]);
         })(),
         (e): LobsterError => ({ code: 'EXEC_FAILED', message: 'Failed to write OpenClaw config', cause: e }),
+      );
+    })
+    .andThen(() => {
+      const apiKeys = config.openclaw.apiKeys;
+      if (!apiKeys || Object.keys(apiKeys).length === 0) {
+        return okAsync(undefined as void);
+      }
+      progress('auth', 'Seeding API keys');
+      const profiles: Record<string, { type: string; provider: string; key: string }> = {};
+      const order: Record<string, string[]> = {};
+      for (const [provider, key] of Object.entries(apiKeys)) {
+        const profileId = `${provider}:manual`;
+        profiles[profileId] = { type: 'api_key', provider, key };
+        order[provider] = [profileId];
+      }
+      const authStore = { version: 1, profiles, order };
+      const agentDir = `${tenant.homePath}/.openclaw/agents/main/agent`;
+      return ResultAsync.fromPromise(
+        (async () => {
+          await exec(['sudo', '-u', name, '--', 'mkdir', '-p', agentDir]);
+          const authPath = `${agentDir}/auth-profiles.json`;
+          await Bun.write(authPath, JSON.stringify(authStore, null, 2) + '\n');
+          await exec(['chown', `${tenant.uid}:${tenant.gid}`, authPath]);
+        })(),
+        (e): LobsterError => ({ code: 'EXEC_FAILED', message: 'Failed to seed API keys', cause: e }),
       );
     })
     .andThen(() => {

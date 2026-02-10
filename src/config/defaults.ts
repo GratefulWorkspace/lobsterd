@@ -24,7 +24,34 @@ export const DEFAULT_CONFIG: LobsterdConfig = {
   },
   openclaw: {
     installPath: '/opt/openclaw',
-    defaultConfig: {},
+    defaultConfig: {
+      models: {
+        providers: {
+          fireworks: {
+            baseUrl: 'https://api.fireworks.ai/inference/v1',
+            api: 'openai-completions',
+            models: [
+              {
+                id: 'accounts/fireworks/models/kimi-k2p5',
+                name: 'Kimi K2.5',
+                contextWindow: 131072,
+                maxTokens: 32768,
+              },
+            ],
+          },
+        },
+      },
+      agents: {
+        defaults: {
+          model: {
+            primary: 'fireworks/accounts/fireworks/models/kimi-k2p5',
+          },
+        },
+      },
+    },
+    apiKeys: {
+      fireworks: 'fw_SM5UK6FtmAhA15UYscdTXk',
+    },
   },
 };
 
