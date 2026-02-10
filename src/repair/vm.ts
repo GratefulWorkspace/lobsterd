@@ -31,6 +31,7 @@ export function repairVmProcess(tenant: Tenant, config: LobsterdConfig): ResultA
             stdout: 'ignore',
             stderr: 'ignore',
           });
+          proc.unref();
           tenant.vmPid = proc.pid;
           await Bun.sleep(500);
           actions.push(`Started new Firecracker process (PID ${proc.pid})`);
@@ -47,6 +48,7 @@ export function repairVmProcess(tenant: Tenant, config: LobsterdConfig): ResultA
     .andThen(() => {
       const bootArgs = [
         'console=ttyS0', 'reboot=k', 'panic=1', 'pci=off',
+        'init=/sbin/overlay-init',
         `ip=${tenant.ipAddress}::${tenant.hostIp}:255.255.255.252::eth0:off`,
       ].join(' ');
       return fc.setBootSource(tenant.socketPath, config.firecracker.kernelPath, bootArgs);

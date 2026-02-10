@@ -138,6 +138,7 @@ export function runSpawn(
             stdout: 'ignore',
             stderr: 'ignore',
           });
+          proc.unref();
           vmProcPid = proc.pid;
           // Give Firecracker a moment to create the socket
           await Bun.sleep(500);

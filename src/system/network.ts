@@ -21,11 +21,13 @@ export function deleteTap(name: string): ResultAsync<void, LobsterError> {
     .orElse(() => okAsync(undefined));
 }
 
+const GUEST_GATEWAY_PORT = 9000;
+
 export function addNat(tapName: string, guestIp: string, gatewayPort: number): ResultAsync<void, LobsterError> {
   return exec([
     'iptables', '-t', 'nat', '-A', 'PREROUTING',
     '-p', 'tcp', '--dport', String(gatewayPort),
-    '-j', 'DNAT', '--to-destination', `${guestIp}:${gatewayPort}`,
+    '-j', 'DNAT', '--to-destination', `${guestIp}:${GUEST_GATEWAY_PORT}`,
     '-m', 'comment', '--comment', `lobster:${tapName}`,
   ]).andThen(() =>
     exec([
@@ -41,7 +43,7 @@ export function removeNat(tapName: string, guestIp: string, gatewayPort: number)
   return exec([
     'iptables', '-t', 'nat', '-D', 'PREROUTING',
     '-p', 'tcp', '--dport', String(gatewayPort),
-    '-j', 'DNAT', '--to-destination', `${guestIp}:${gatewayPort}`,
+    '-j', 'DNAT', '--to-destination', `${guestIp}:${GUEST_GATEWAY_PORT}`,
     '-m', 'comment', '--comment', `lobster:${tapName}`,
   ]).orElse(() => okAsync({ exitCode: 0, stdout: '', stderr: '' }))
     .andThen(() =>
