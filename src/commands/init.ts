@@ -4,6 +4,7 @@ import type { LobsterError, LobsterdConfig } from '../types/index.js';
 import { exec, execUnchecked } from '../system/exec.js';
 import * as zfs from '../system/zfs.js';
 import * as firewall from '../system/firewall.js';
+import * as nginx from '../system/nginx.js';
 import { CONFIG_DIR, CONFIG_PATH, REGISTRY_PATH, DEFAULT_CONFIG, EMPTY_REGISTRY } from '../config/defaults.js';
 
 function checkLinux(): ResultAsync<void, LobsterError> {
@@ -90,6 +91,7 @@ export interface InitResult {
   configCreated: boolean;
   procfsHardened: boolean;
   firewallInitialized: boolean;
+  nginxConfigured: boolean;
 }
 
 export function runInit(config: LobsterdConfig = DEFAULT_CONFIG): ResultAsync<InitResult, LobsterError> {
@@ -100,6 +102,7 @@ export function runInit(config: LobsterdConfig = DEFAULT_CONFIG): ResultAsync<In
     configCreated: false,
     procfsHardened: false,
     firewallInitialized: false,
+    nginxConfigured: false,
   };
 
   return checkLinux()
@@ -141,8 +144,18 @@ export function runInit(config: LobsterdConfig = DEFAULT_CONFIG): ResultAsync<In
       result.procfsHardened = true;
       return firewall.initFirewall();
     })
-    .map(() => {
+    .andThen(() => {
       result.firewallInitialized = true;
+      return nginx.ensureNginxInstalled();
+    })
+    .andThen(() => nginx.addFirewallBypass())
+    .andThen(() => exec(['mkdir', '-p', '/etc/lobsterd/nginx']))
+    .andThen(() => nginx.generateWildcardCert())
+    .andThen(() => nginx.writeBaseConfig())
+    .andThen(() => nginx.updateTenantMap(EMPTY_REGISTRY))
+    .andThen(() => nginx.ensureNginxRunning())
+    .map(() => {
+      result.nginxConfigured = true;
       return result;
     });
 }

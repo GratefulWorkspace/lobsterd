@@ -8,6 +8,7 @@ import * as user from '../system/user.js';
 import * as docker from '../system/docker.js';
 import * as systemd from '../system/systemd.js';
 import * as firewall from '../system/firewall.js';
+import * as nginx from '../system/nginx.js';
 import { exec } from '../system/exec.js';
 
 export interface SpawnProgress {
@@ -186,7 +187,8 @@ WantedBy=default.target
         ...config.openclaw.defaultConfig,
         gateway: {
           mode: 'local',
-          tls: { enabled: true },
+          tls: { enabled: false },
+          controlUi: { enabled: false },
           auth: { token: tenant.gatewayToken },
           ...(config.openclaw.defaultConfig?.gateway as Record<string, unknown> ?? {}),
         },
@@ -221,6 +223,10 @@ WantedBy=default.target
       registry.nextUid += 1;
       registry.nextGatewayPort += 1;
       return saveRegistry(registry);
+    })
+    .andThen(() => {
+      progress('nginx', 'Updating Nginx routing');
+      return nginx.updateTenantMap(registry).andThen(() => nginx.reloadNginx());
     })
     .map(() => tenant)
     .orElse((error) => rollback(error));

@@ -5,6 +5,7 @@ import * as zfs from '../system/zfs.js';
 import * as user from '../system/user.js';
 import * as systemd from '../system/systemd.js';
 import * as firewall from '../system/firewall.js';
+import * as nginx from '../system/nginx.js';
 
 export interface EvictProgress {
   step: string;
@@ -62,5 +63,11 @@ export function runEvict(
       progress('registry', 'Removing from registry');
       registry.tenants = registry.tenants.filter((t) => t.name !== name);
       return saveRegistry(registry);
+    })
+    .andThen(() => {
+      progress('nginx', 'Updating Nginx routing');
+      return nginx.updateTenantMap(registry)
+        .andThen(() => nginx.reloadNginx())
+        .orElse(() => okAsync(undefined));
     });
 }
