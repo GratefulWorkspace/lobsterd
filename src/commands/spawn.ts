@@ -125,8 +125,8 @@ export function runSpawn(
       // Step 4: Spawn Firecracker process
       progress('firecracker', 'Starting Firecracker microVM');
 
-      // Clean up any stale socket
-      return exec(['rm', '-f', tenant.socketPath]).orElse(() => okAsync({ exitCode: 0, stdout: '', stderr: '' }));
+      // Clean up any stale sockets (API + vsock UDS)
+      return exec(['rm', '-f', tenant.socketPath, `${tenant.socketPath}.vsock`]).orElse(() => okAsync({ exitCode: 0, stdout: '', stderr: '' }));
     })
     .andThen(() => {
       return ResultAsync.fromPromise(

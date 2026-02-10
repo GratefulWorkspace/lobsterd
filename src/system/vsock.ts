@@ -13,11 +13,12 @@ function tcpSend(host: string, port: number, payload: string, timeoutMs: number)
 
     socket.connect(port, host, () => {
       socket.write(payload);
-      socket.end();
+      // Don't call socket.end() — the server processes on newline and closes the connection
     });
     socket.on('data', (chunk) => { response += chunk.toString(); });
     socket.on('end', () => {
       clearTimeout(timer);
+      socket.end();
       resolve(response);
     });
     socket.on('error', (err) => {

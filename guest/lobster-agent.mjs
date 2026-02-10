@@ -13,20 +13,32 @@ let gatewayProcess = null;
 let secrets = {};
 
 function startAgent() {
-  const server = createServer((conn) => {
+  const server = createServer({ allowHalfOpen: true }, (conn) => {
     let data = '';
     conn.on('data', (chunk) => {
       data += chunk.toString();
+      // Process when we get a newline (message delimiter)
+      if (data.includes('\n')) {
+        try {
+          const msg = JSON.parse(data.trim());
+          const response = handleMessage(msg);
+          conn.end(response + '\n');
+        } catch (e) {
+          conn.end(JSON.stringify({ error: e.message }) + '\n');
+        }
+      }
     });
     conn.on('end', () => {
-      try {
-        const msg = JSON.parse(data.trim());
-        const response = handleMessage(msg);
-        conn.write(response + '\n');
-      } catch (e) {
-        conn.write(JSON.stringify({ error: e.message }) + '\n');
+      // If no newline was received yet, try to process what we have
+      if (data.length > 0 && !data.includes('\n')) {
+        try {
+          const msg = JSON.parse(data.trim());
+          const response = handleMessage(msg);
+          conn.end(response + '\n');
+        } catch (e) {
+          conn.end(JSON.stringify({ error: e.message }) + '\n');
+        }
       }
-      conn.end();
     });
   });
 
@@ -35,12 +47,13 @@ function startAgent() {
   });
 
   // Health ping listener on separate port
-  const healthServer = createServer((conn) => {
+  const healthServer = createServer({ allowHalfOpen: true }, (conn) => {
     let data = '';
-    conn.on('data', (chunk) => { data += chunk.toString(); });
+    conn.on('data', () => {
+      conn.end('PONG\n');
+    });
     conn.on('end', () => {
-      conn.write('PONG\n');
-      conn.end();
+      if (!data) conn.end('PONG\n');
     });
   });
 
