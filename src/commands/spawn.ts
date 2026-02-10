@@ -188,7 +188,7 @@ WantedBy=default.target
         gateway: {
           mode: 'local',
           tls: { enabled: false },
-          controlUi: { enabled: false },
+          controlUi: { enabled: false, allowedOrigins: ['http://localhost:5173'], dangerouslyDisableDeviceAuth: true },
           auth: { token: tenant.gatewayToken },
           ...(config.openclaw.defaultConfig?.gateway as Record<string, unknown> ?? {}),
         },
