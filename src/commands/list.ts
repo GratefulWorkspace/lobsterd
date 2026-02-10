@@ -24,20 +24,20 @@ function quickCheck(tenant: Tenant): ResultAsync<TenantListEntry, LobsterError> 
   };
 
   return docker.isResponsive(tenant.name, tenant.uid)
-    .map((ok) => { entry.docker = ok ? 'up' : 'down'; })
-    .orElse(() => { entry.docker = 'err'; return ok(undefined); })
+    .map((isUp) => { entry.docker = isUp ? 'up' : 'down'; })
+    .orElse(() => { entry.docker = 'err'; return okAsync(undefined); })
     .andThen(() => systemd.isActive('openclaw-gateway', tenant.name, tenant.uid))
     .map((active) => { entry.gateway = active ? 'up' : 'down'; })
-    .orElse(() => { entry.gateway = 'err'; return ok(undefined); })
+    .orElse(() => { entry.gateway = 'err'; return okAsync(undefined); })
     .map(() => entry);
 }
 
 export function runList(
   opts: { json?: boolean } = {},
 ): ResultAsync<TenantListEntry[], LobsterError> {
-  return loadRegistry().andThen((registry) => {
+  return loadRegistry().andThen((registry): ResultAsync<TenantListEntry[], LobsterError> => {
     if (registry.tenants.length === 0) {
-      return ok([]);
+      return okAsync([]);
     }
     return ResultAsync.combine(
       registry.tenants.map((t) => quickCheck(t)),
