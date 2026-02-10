@@ -1,7 +1,7 @@
-import { ok, errAsync, okAsync, ResultAsync } from 'neverthrow';
+import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import type { LobsterError } from '../types/index.js';
 import { loadConfig, loadRegistry } from '../config/loader.js';
-import * as zfs from '../system/zfs.js';
+import { exec } from '../system/exec.js';
 
 function formatSnapName(): string {
   const now = new Date();
@@ -21,12 +21,13 @@ export function runSnap(
   name: string,
   opts: { prune?: boolean } = {},
 ): ResultAsync<string, LobsterError> {
-  let dataset: string;
+  let overlayPath: string;
+  let snapshotDir: string;
   let retention: number;
 
   return loadConfig()
     .andThen((config) => {
-      retention = config.zfs.snapshotRetention;
+      retention = config.overlay.snapshotRetention;
       return loadRegistry();
     })
     .andThen((registry): ResultAsync<string, LobsterError> => {
@@ -34,19 +35,33 @@ export function runSnap(
       if (!tenant) {
         return errAsync({ code: 'TENANT_NOT_FOUND', message: `Tenant "${name}" not found` });
       }
-      dataset = tenant.zfsDataset;
+      overlayPath = tenant.overlayPath;
+      snapshotDir = `${overlayPath}.snapshots`;
       const snapName = formatSnapName();
-      return zfs.snapshot(dataset, snapName).map(() => snapName);
+      const snapPath = `${snapshotDir}/${snapName}.ext4`;
+
+      return exec(['mkdir', '-p', snapshotDir])
+        .andThen(() => exec(['cp', '--sparse=always', overlayPath, snapPath]))
+        .map(() => snapName);
     })
     .andThen((snapName): ResultAsync<string, LobsterError> => {
       if (!opts.prune) return okAsync(snapName);
 
-      return zfs.listSnapshots(dataset).andThen((snaps) => {
-        if (snaps.length <= retention) return okAsync(snapName);
-        const toRemove = snaps.slice(0, snaps.length - retention);
-        return ResultAsync.combine(
-          toRemove.map((s) => zfs.destroySnapshot(s)),
-        ).map(() => snapName);
-      });
+      return ResultAsync.fromPromise(
+        (async () => {
+          const proc = Bun.spawn(['ls', '-1', snapshotDir], { stdout: 'pipe', stderr: 'pipe' });
+          const stdout = await new Response(proc.stdout).text();
+          await proc.exited;
+          const snaps = stdout.trim().split('\n').filter(Boolean).sort();
+          if (snaps.length <= retention) return snapName;
+
+          const toRemove = snaps.slice(0, snaps.length - retention);
+          for (const s of toRemove) {
+            await exec(['rm', '-f', `${snapshotDir}/${s}`]);
+          }
+          return snapName;
+        })(),
+        (e): LobsterError => ({ code: 'EXEC_FAILED', message: `Failed to prune snapshots: ${e}` }),
+      );
     });
 }

@@ -1,4 +1,4 @@
-import { ResultAsync, ok, errAsync, okAsync } from 'neverthrow';
+import { ResultAsync, errAsync, okAsync } from 'neverthrow';
 import type { LobsterError, Tenant, HealthCheckResult, RepairResult } from '../types/index.js';
 import { loadConfig, loadRegistry } from '../config/loader.js';
 import { runAllChecks } from '../checks/index.js';
@@ -46,7 +46,7 @@ export function runMolt(
         (acc, tenant) =>
           acc.andThen((results) => {
             progress(tenant.name, 'checking');
-            return runAllChecks(tenant)
+            return runAllChecks(tenant, config)
               .andThen((initialChecks): ResultAsync<MoltTenantResult, LobsterError> => {
                 const failed = initialChecks.filter((c) => c.status !== 'ok');
                 if (failed.length === 0) {
@@ -61,9 +61,9 @@ export function runMolt(
                 }
 
                 progress(tenant.name, 'repairing', `${failed.length} issue(s) found`);
-                return runRepairs(tenant, failed).andThen((repairs) => {
+                return runRepairs(tenant, failed, config).andThen((repairs) => {
                   progress(tenant.name, 'verifying');
-                  return runAllChecks(tenant).map((finalChecks) => ({
+                  return runAllChecks(tenant, config).map((finalChecks) => ({
                     tenant: tenant.name,
                     initialChecks,
                     repairs,

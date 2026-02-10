@@ -27,11 +27,8 @@ export function TenantRow({ name, port, watchState }: Props) {
   const stateColor = WATCH_STATE_COLORS[watchState.state];
   const stateSymbol = WATCH_STATE_SYMBOLS[watchState.state];
 
-  // Group results by category
-  const dockerResults = watchState.lastResults.filter((r) => r.check.startsWith('docker.'));
-  const gatewayResults = watchState.lastResults.filter((r) => r.check.startsWith('gateway.'));
-  const zfsResults = watchState.lastResults.filter((r) => r.check.startsWith('zfs.'));
-  const fsResults = watchState.lastResults.filter((r) => r.check.startsWith('fs.'));
+  const vmResults = watchState.lastResults.filter((r) => r.check.startsWith('vm.'));
+  const netResults = watchState.lastResults.filter((r) => r.check.startsWith('net.'));
 
   return (
     <Box gap={2}>
@@ -47,10 +44,8 @@ export function TenantRow({ name, port, watchState }: Props) {
         <Text color={stateColor}>{watchState.state}</Text>
       </Box>
       <Box gap={1}>
-        {dockerResults.length > 0 && <CheckBadge label="Docker" results={dockerResults} />}
-        {gatewayResults.length > 0 && <CheckBadge label="GW" results={gatewayResults} />}
-        {zfsResults.length > 0 && <CheckBadge label="ZFS" results={zfsResults} />}
-        {fsResults.length > 0 && <CheckBadge label="FS" results={fsResults} />}
+        {vmResults.length > 0 && <CheckBadge label="VM" results={vmResults} />}
+        {netResults.length > 0 && <CheckBadge label="Net" results={netResults} />}
       </Box>
     </Box>
   );

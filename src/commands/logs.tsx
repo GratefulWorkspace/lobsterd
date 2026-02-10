@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { render, useApp, useInput } from 'ink';
 import type { Tenant } from '../types/index.js';
-import { loadRegistry } from '../config/loader.js';
-import * as systemd from '../system/systemd.js';
+import { loadConfig, loadRegistry } from '../config/loader.js';
+import * as vsock from '../system/vsock.js';
 import { LogStream } from '../ui/LogStream.js';
 
-function LogsApp({ tenant, service }: { tenant: Tenant; service: string }) {
+function LogsApp({ tenant }: { tenant: Tenant }) {
   const [lines, setLines] = useState<string[]>([]);
   const { exit } = useApp();
 
@@ -14,34 +14,47 @@ function LogsApp({ tenant, service }: { tenant: Tenant; service: string }) {
   });
 
   useEffect(() => {
-    const proc = systemd.streamLogs(service, tenant.name, tenant.uid);
-    let buffer = '';
+    let cancelled = false;
 
-    async function readStream() {
-      const reader = (proc.stdout as ReadableStream).getReader();
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += new TextDecoder().decode(value);
-          const parts = buffer.split('\n');
-          buffer = parts.pop() ?? '';
-          if (parts.length > 0) {
-            setLines((prev) => [...prev, ...parts]);
+    async function pollLogs() {
+      // Poll guest agent for logs via vsock
+      while (!cancelled) {
+        try {
+          // For now, read from Caddy access log via host
+          const proc = Bun.spawn(['tail', '-f', `/var/log/caddy/access-${tenant.name}.log`], {
+            stdout: 'pipe',
+            stderr: 'pipe',
+          });
+
+          const reader = (proc.stdout as ReadableStream).getReader();
+          try {
+            while (!cancelled) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              const text = new TextDecoder().decode(value);
+              const parts = text.split('\n').filter(Boolean);
+              if (parts.length > 0) {
+                setLines((prev) => [...prev, ...parts]);
+              }
+            }
+          } catch {
+            // Stream ended
           }
+          proc.kill();
+        } catch {
+          // Retry after a delay
+          await Bun.sleep(2000);
         }
-      } catch {
-        // Stream ended
       }
     }
 
-    readStream();
-    return () => { proc.kill(); };
+    pollLogs();
+    return () => { cancelled = true; };
   }, []);
 
   return (
     <LogStream
-      title={`${tenant.name} — ${service}`}
+      title={`${tenant.name} — logs`}
       lines={lines}
     />
   );
@@ -51,8 +64,6 @@ export async function runLogs(
   name: string,
   opts: { service?: string } = {},
 ): Promise<number> {
-  const service = opts.service ?? 'openclaw-gateway';
-
   const registryResult = await loadRegistry();
   if (registryResult.isErr()) {
     console.error(`Error: ${registryResult.error.message}`);
@@ -66,7 +77,12 @@ export async function runLogs(
   }
 
   if (!process.stdin.isTTY) {
-    const proc = systemd.streamLogs(service, tenant.name, tenant.uid);
+    // Non-TTY: tail Caddy access log
+    const logPath = `/var/log/caddy/access-${tenant.name}.log`;
+    const proc = Bun.spawn(['tail', '-f', logPath], {
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
     const reader = (proc.stdout as ReadableStream).getReader();
     const decoder = new TextDecoder();
     try {
@@ -83,7 +99,7 @@ export async function runLogs(
   }
 
   const { waitUntilExit } = render(
-    <LogsApp tenant={tenant} service={service} />,
+    <LogsApp tenant={tenant} />,
   );
 
   await waitUntilExit();

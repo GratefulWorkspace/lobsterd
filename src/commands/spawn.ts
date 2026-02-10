@@ -1,14 +1,13 @@
-import { ok, errAsync, okAsync, ResultAsync } from 'neverthrow';
-import { chmodSync } from 'node:fs';
+import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import type { LobsterError, Tenant, TenantRegistry, LobsterdConfig } from '../types/index.js';
 import { loadConfig, loadRegistry, saveRegistry } from '../config/loader.js';
 import { TENANT_NAME_REGEX } from '../config/schema.js';
-import * as zfs from '../system/zfs.js';
-import * as user from '../system/user.js';
-import * as docker from '../system/docker.js';
-import * as systemd from '../system/systemd.js';
-import * as firewall from '../system/firewall.js';
-import * as nginx from '../system/nginx.js';
+import { SOCKETS_DIR } from '../config/defaults.js';
+import * as image from '../system/image.js';
+import * as network from '../system/network.js';
+import * as fc from '../system/firecracker.js';
+import * as vsock from '../system/vsock.js';
+import * as caddy from '../system/caddy.js';
 import { exec } from '../system/exec.js';
 
 export interface SpawnProgress {
@@ -18,13 +17,24 @@ export interface SpawnProgress {
 
 type UndoFn = () => ResultAsync<void, LobsterError>;
 
+function computeSubnetIps(subnetBase: string, subnetIndex: number): { hostIp: string; guestIp: string } {
+  const parts = subnetBase.split('.').map(Number);
+  // Each /30 subnet uses 4 addresses: network, host, guest, broadcast
+  const offset = subnetIndex * 4;
+  const base = (parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3];
+  const subnetAddr = base + offset;
+  const hostAddr = subnetAddr + 1;
+  const guestAddr = subnetAddr + 2;
+  const toIp = (n: number) => `${(n >> 24) & 0xff}.${(n >> 16) & 0xff}.${(n >> 8) & 0xff}.${n & 0xff}`;
+  return { hostIp: toIp(hostAddr), guestIp: toIp(guestAddr) };
+}
+
 export function runSpawn(
   name: string,
   onProgress?: (p: SpawnProgress) => void,
 ): ResultAsync<Tenant, LobsterError> {
   const progress = (step: string, detail: string) => onProgress?.({ step, detail });
 
-  // ── Input validation ──────────────────────────────────────────────────
   if (!TENANT_NAME_REGEX.test(name)) {
     return errAsync({
       code: 'VALIDATION_FAILED',
@@ -35,6 +45,7 @@ export function runSpawn(
   let config: LobsterdConfig;
   let registry: TenantRegistry;
   let tenant: Tenant;
+  let vmProcPid: number | null = null;
   const undoStack: UndoFn[] = [];
 
   function rollback(error: LobsterError): ResultAsync<never, LobsterError> {
@@ -65,168 +76,157 @@ export function runSpawn(
         return errAsync({ code: 'TENANT_EXISTS', message: `Tenant "${name}" already exists` });
       }
 
-      const uid = registry.nextUid;
-      const gid = uid;
+      const cid = registry.nextCid;
+      const subnetIndex = registry.nextSubnetIndex;
       const gatewayPort = registry.nextGatewayPort;
-      const dataset = `${config.zfs.parentDataset}/${name}`;
-      const homePath = `${config.tenants.homeBase}/${name}`;
+      const { hostIp, guestIp } = computeSubnetIps(config.network.subnetBase, subnetIndex);
+      const tapDev = `tap-${name}`;
+      const vmId = `vm-${name}`;
+      const overlayPath = `${config.overlay.baseDir}/${name}.ext4`;
+      const socketPath = `${SOCKETS_DIR}/${name}.sock`;
 
       tenant = {
         name,
-        uid,
-        gid,
+        vmId,
+        cid,
+        ipAddress: guestIp,
+        hostIp,
+        tapDev,
         gatewayPort,
-        zfsDataset: dataset,
-        homePath,
+        overlayPath,
+        socketPath,
+        vmPid: null,
         createdAt: new Date().toISOString(),
         status: 'active',
+        gatewayToken: crypto.randomUUID(),
       };
 
-      progress('zfs', `Creating dataset ${dataset}`);
-      return zfs.createDataset(dataset, {
-        mountpoint: homePath,
-        quota: config.zfs.defaultQuota,
-        compression: config.zfs.compression,
+      // Step 1: Create overlay
+      progress('overlay', `Creating overlay ${overlayPath} (${config.overlay.defaultSizeMb}MB)`);
+      return image.createOverlay(overlayPath, config.overlay.defaultSizeMb);
+    })
+    .andThen(() => {
+      undoStack.push(() => image.deleteOverlay(tenant.overlayPath));
+
+      // Step 2: Create TAP device
+      progress('network', `Creating TAP ${tenant.tapDev} (host=${tenant.hostIp}, guest=${tenant.ipAddress})`);
+      return network.createTap(tenant.tapDev, tenant.hostIp, tenant.ipAddress);
+    })
+    .andThen(() => {
+      undoStack.push(() => network.deleteTap(tenant.tapDev));
+
+      // Step 3: Add NAT rules
+      progress('nat', `Adding NAT rules for port ${tenant.gatewayPort}`);
+      return network.addNat(tenant.tapDev, tenant.ipAddress, tenant.gatewayPort);
+    })
+    .andThen(() => {
+      undoStack.push(() => network.removeNat(tenant.tapDev, tenant.ipAddress, tenant.gatewayPort));
+
+      // Step 4: Spawn Firecracker process
+      progress('firecracker', 'Starting Firecracker microVM');
+
+      // Clean up any stale socket
+      return exec(['rm', '-f', tenant.socketPath]).orElse(() => okAsync({ exitCode: 0, stdout: '', stderr: '' }));
+    })
+    .andThen(() => {
+      return ResultAsync.fromPromise(
+        (async () => {
+          const proc = Bun.spawn([
+            config.firecracker.binaryPath,
+            '--api-sock', tenant.socketPath,
+          ], {
+            stdout: 'ignore',
+            stderr: 'ignore',
+          });
+          vmProcPid = proc.pid;
+          // Give Firecracker a moment to create the socket
+          await Bun.sleep(500);
+        })(),
+        (e): LobsterError => ({
+          code: 'VM_BOOT_FAILED',
+          message: `Failed to spawn Firecracker: ${e instanceof Error ? e.message : String(e)}`,
+          cause: e,
+        }),
+      );
+    })
+    .andThen(() => {
+      undoStack.push(() =>
+        ResultAsync.fromPromise(
+          (async () => {
+            if (vmProcPid) {
+              try { process.kill(vmProcPid, 'SIGKILL'); } catch {}
+            }
+            await exec(['rm', '-f', tenant.socketPath]);
+          })(),
+          () => ({ code: 'EXEC_FAILED' as const, message: 'Failed to kill VM' }),
+        ),
+      );
+
+      // Step 5: Configure VM via Firecracker API
+      progress('vm-config', `Configuring VM (${config.firecracker.defaultVcpuCount} vCPU, ${config.firecracker.defaultMemSizeMb}MB RAM)`);
+      return fc.configureVm(tenant.socketPath, {
+        vcpuCount: config.firecracker.defaultVcpuCount,
+        memSizeMib: config.firecracker.defaultMemSizeMb,
       });
     })
     .andThen(() => {
-      undoStack.push(() => zfs.destroyDataset(tenant.zfsDataset, true));
-
-      progress('user', `Creating user ${name} (uid ${tenant.uid})`);
-      return user.createUser(name, tenant.uid, tenant.homePath);
+      const bootArgs = [
+        'console=ttyS0',
+        'reboot=k',
+        'panic=1',
+        'pci=off',
+        `ip=${tenant.ipAddress}::${tenant.hostIp}:255.255.255.252::eth0:off`,
+      ].join(' ');
+      progress('boot-source', 'Setting boot source');
+      return fc.setBootSource(tenant.socketPath, config.firecracker.kernelPath, bootArgs);
     })
     .andThen(() => {
-      undoStack.push(() => user.deleteUser(name));
+      progress('drives', 'Adding rootfs and overlay drives');
+      return fc.addDrive(tenant.socketPath, 'rootfs', config.firecracker.rootfsPath, true);
+    })
+    .andThen(() => fc.addDrive(tenant.socketPath, 'overlay', tenant.overlayPath, false))
+    .andThen(() => {
+      progress('vsock', `Adding vsock (CID ${tenant.cid})`);
+      return fc.addVsock(tenant.socketPath, tenant.cid);
+    })
+    .andThen(() => {
+      progress('net-iface', `Adding network interface on ${tenant.tapDev}`);
+      return fc.addNetworkInterface(tenant.socketPath, 'eth0', tenant.tapDev);
+    })
+    .andThen(() => {
+      progress('start', 'Starting VM instance');
+      return fc.startInstance(tenant.socketPath);
+    })
+    .andThen(() => {
+      tenant.vmPid = vmProcPid;
 
-      progress('permissions', `Setting ownership and permissions on ${tenant.homePath}`);
-      return exec(['chown', `${tenant.uid}:${tenant.gid}`, tenant.homePath]).andThen(() => {
-        chmodSync(tenant.homePath, 0o700);
-        return okAsync(undefined);
+      // Step 6: Wait for guest agent
+      progress('agent', 'Waiting for guest agent to respond on vsock');
+      return vsock.waitForAgent(tenant.cid, config.vsock.agentPort, config.vsock.connectTimeoutMs);
+    })
+    .andThen(() => {
+      // Step 7: Inject secrets
+      progress('secrets', 'Injecting API keys and gateway token');
+      return vsock.injectSecrets(tenant.cid, config.vsock.agentPort, {
+        OPENCLAW_GATEWAY_TOKEN: tenant.gatewayToken,
+        OPENCLAW_CONFIG: JSON.stringify(config.openclaw.defaultConfig),
       });
     })
     .andThen(() => {
-      progress('subuid', 'Configuring subordinate UID/GID ranges');
-      return user.ensureSubuidRange(name, tenant.uid * 65536);
+      // Step 8: Add Caddy route
+      progress('caddy', `Adding Caddy route for ${name}.${config.caddy.domain}`);
+      return caddy.addRoute(config.caddy.adminApi, name, config.caddy.domain, tenant.gatewayPort);
     })
     .andThen(() => {
-      progress('linger', 'Enabling loginctl linger');
-      return user.enableLinger(name);
-    })
-    .andThen(() => {
-      undoStack.push(() => user.disableLinger(name));
+      undoStack.push(() => caddy.removeRoute(config.caddy.adminApi, name));
 
-      progress('session', 'Waiting for user systemd session');
-      return user.waitForUserSession(tenant.uid);
-    })
-    .andThen(() => {
-      progress('dirs', 'Creating tenant directories');
-      return exec(['sudo', '-u', name, '--', 'mkdir', '-p',
-        `${tenant.homePath}/.config`,
-        `${tenant.homePath}/.local/share`,
-        `${tenant.homePath}/.openclaw`,
-        `${tenant.homePath}/.openclaw/tmp`,
-      ]).map(() => undefined);
-    })
-    .andThen(() => {
-      progress('docker', 'Installing rootless Docker');
-      return docker.installRootless(name, tenant.uid);
-    })
-    .andThen(() => {
-      progress('docker-config', 'Writing Docker daemon.json');
-      const dockerConfigDir = `${tenant.homePath}/.config/docker`;
-      const daemonJson = `${dockerConfigDir}/daemon.json`;
-      return ResultAsync.fromPromise(
-        (async () => {
-          await exec(['sudo', '-u', name, '--', 'mkdir', '-p', dockerConfigDir]);
-          await Bun.write(daemonJson, JSON.stringify({ 'no-new-privileges': true }, null, 2) + '\n');
-          chmodSync(daemonJson, 0o600);
-          await exec(['chown', `${tenant.uid}:${tenant.gid}`, daemonJson]);
-        })(),
-        (e): LobsterError => ({ code: 'EXEC_FAILED', message: 'Failed to write Docker daemon.json', cause: e }),
-      );
-    })
-    .andThen(() => {
-      progress('gateway-service', 'Creating OpenClaw gateway service');
-      const token = crypto.randomUUID();
-      tenant.gatewayToken = token;
-      const serviceContent = `[Unit]
-Description=OpenClaw Gateway for ${name}
-After=network-online.target docker.service
-Wants=network-online.target
-
-[Service]
-Type=simple
-Environment=HOME=${tenant.homePath}
-Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-Environment=XDG_RUNTIME_DIR=/run/user/${tenant.uid}
-Environment=DOCKER_HOST=unix:///run/user/${tenant.uid}/docker.sock
-Environment=NODE_ENV=production
-Environment=TMPDIR=${tenant.homePath}/.openclaw/tmp
-Environment=OPENCLAW_GATEWAY_TOKEN=${token}
-ExecStart=/usr/bin/env node ${config.openclaw.installPath}/openclaw.mjs gateway --port ${tenant.gatewayPort} --auth token --bind loopback
-Restart=on-failure
-RestartSec=5
-KillMode=process
-
-[Install]
-WantedBy=default.target
-`;
-      const servicePath = `${tenant.homePath}/.config/systemd/user/openclaw-gateway.service`;
-      return ResultAsync.fromPromise(
-        (async () => {
-          await exec(['sudo', '-u', name, '--', 'mkdir', '-p', `${tenant.homePath}/.config/systemd/user`]);
-          await Bun.write(servicePath, serviceContent);
-          await exec(['chown', `${tenant.uid}:${tenant.gid}`, servicePath]);
-        })(),
-        (e): LobsterError => ({ code: 'EXEC_FAILED', message: 'Failed to create gateway service', cause: e }),
-      );
-    })
-    .andThen(() => {
-      progress('openclaw-config', 'Writing OpenClaw config');
-      const openclawConf = {
-        ...config.openclaw.defaultConfig,
-        gateway: {
-          mode: 'local',
-          tls: { enabled: false },
-          controlUi: { enabled: false, allowedOrigins: ['http://localhost:5173'], dangerouslyDisableDeviceAuth: true },
-          auth: { token: tenant.gatewayToken },
-          ...(config.openclaw.defaultConfig?.gateway as Record<string, unknown> ?? {}),
-        },
-      };
-      return ResultAsync.fromPromise(
-        (async () => {
-          const confPath = `${tenant.homePath}/.openclaw/openclaw.json`;
-          await Bun.write(confPath, JSON.stringify(openclawConf, null, 2) + '\n');
-          chmodSync(confPath, 0o600);
-          await exec(['chown', `${tenant.uid}:${tenant.gid}`, confPath]);
-        })(),
-        (e): LobsterError => ({ code: 'EXEC_FAILED', message: 'Failed to write OpenClaw config', cause: e }),
-      );
-    })
-    .andThen(() => {
-      progress('services', 'Enabling and starting services');
-      return systemd.daemonReload(name, tenant.uid)
-        .andThen(() => systemd.enableService('docker', name, tenant.uid))
-        .andThen(() => systemd.startService('docker', name, tenant.uid))
-        .andThen(() => systemd.enableService('openclaw-gateway', name, tenant.uid))
-        .andThen(() => systemd.startService('openclaw-gateway', name, tenant.uid));
-    })
-    .andThen(() => {
-      progress('firewall', 'Adding iptables rules');
-      return firewall.addTenantRules(tenant.uid, tenant.gatewayPort);
-    })
-    .andThen(() => {
-      undoStack.push(() => firewall.removeTenantRules(tenant.uid, tenant.gatewayPort));
-
+      // Step 9: Save to registry
       progress('registry', 'Registering tenant');
       registry.tenants.push(tenant);
-      registry.nextUid += 1;
+      registry.nextCid += 1;
+      registry.nextSubnetIndex += 1;
       registry.nextGatewayPort += 1;
       return saveRegistry(registry);
-    })
-    .andThen(() => {
-      progress('nginx', 'Updating Nginx routing');
-      return nginx.updateTenantMap(registry).andThen(() => nginx.reloadNginx());
     })
     .map(() => tenant)
     .orElse((error) => rollback(error));

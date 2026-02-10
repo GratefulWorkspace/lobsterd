@@ -1,0 +1,65 @@
+#!/bin/sh
+set -e
+
+# overlay-init — PID 1 handoff script for Firecracker microVMs
+# Mounts overlay drive, creates overlayfs, pivot_root, exec init
+
+OVERLAY_DEV="/dev/vdb"
+ROOTFS_MOUNT="/mnt/rootfs"
+OVERLAY_MOUNT="/mnt/overlay"
+MERGED="/mnt/merged"
+
+# Mount the overlay drive (ext4 sparse file from host)
+mkdir -p "$OVERLAY_MOUNT"
+mount "$OVERLAY_DEV" "$OVERLAY_MOUNT"
+
+# Create overlayfs directories
+mkdir -p "$OVERLAY_MOUNT/upper" "$OVERLAY_MOUNT/work"
+mkdir -p "$MERGED"
+
+# Mount overlayfs: lower=rootfs (current /), upper+work=overlay drive
+mount -t overlay overlay \
+  -o "lowerdir=/,upperdir=$OVERLAY_MOUNT/upper,workdir=$OVERLAY_MOUNT/work" \
+  "$MERGED"
+
+# Prepare for pivot_root
+mkdir -p "$MERGED/mnt/old-root"
+
+# pivot_root into merged filesystem
+cd "$MERGED"
+pivot_root . mnt/old-root
+
+# Remount essential filesystems
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+
+# Parse IP from kernel cmdline and configure networking
+configure_network() {
+  local ip_param
+  ip_param=$(cat /proc/cmdline | tr ' ' '\n' | grep '^ip=' | head -1)
+  if [ -n "$ip_param" ]; then
+    # Format: ip=<client-ip>::<gateway-ip>:<netmask>::<device>:off
+    local client_ip gateway netmask device
+    client_ip=$(echo "$ip_param" | cut -d= -f2 | cut -d: -f1)
+    gateway=$(echo "$ip_param" | cut -d: -f3)
+    netmask=$(echo "$ip_param" | cut -d: -f4)
+    device=$(echo "$ip_param" | cut -d: -f6)
+
+    if [ -n "$client_ip" ] && [ -n "$device" ]; then
+      ip addr add "$client_ip/30" dev "$device" 2>/dev/null || true
+      ip link set "$device" up 2>/dev/null || true
+      if [ -n "$gateway" ]; then
+        ip route add default via "$gateway" 2>/dev/null || true
+      fi
+    fi
+  fi
+}
+
+configure_network
+
+# Unmount old root (lazy)
+umount -l /mnt/old-root 2>/dev/null || true
+
+# Hand off to real init
+exec /sbin/init

@@ -42,7 +42,7 @@ export function startWatchdog(
         }
 
         // Run checks
-        const checksResult = await runAllChecks(tenant);
+        const checksResult = await runAllChecks(tenant, config);
         if (checksResult.isErr()) continue;
 
         const checkResults = checksResult.value;
@@ -60,7 +60,7 @@ export function startWatchdog(
           const failed = checkResults.filter((c) => c.status !== 'ok');
           emitter.emit('repair-start', { tenant: tenant.name, checks: failed });
 
-          const repairResult = await runRepairs(tenant, failed);
+          const repairResult = await runRepairs(tenant, failed, config);
           if (repairResult.isOk()) {
             emitter.emit('repair-complete', { tenant: tenant.name, results: repairResult.value });
             tenantStates[tenant.name] = {

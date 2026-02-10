@@ -4,14 +4,18 @@ export type TenantStatus = 'active' | 'suspended' | 'removing';
 
 export interface Tenant {
   name: string;
-  uid: number;
-  gid: number;
+  vmId: string;
+  cid: number;
+  ipAddress: string;
+  hostIp: string;
+  tapDev: string;
   gatewayPort: number;
-  zfsDataset: string;
-  homePath: string;
+  overlayPath: string;
+  socketPath: string;
+  vmPid: number | null;
   createdAt: string;
   status: TenantStatus;
-  gatewayToken?: string;
+  gatewayToken: string;
 }
 
 // ── Health ───────────────────────────────────────────────────────────────────
@@ -44,18 +48,36 @@ export interface TenantWatchState {
 
 // ── Config ───────────────────────────────────────────────────────────────────
 
-export interface ZfsConfig {
-  pool: string;
-  parentDataset: string;
-  defaultQuota: string;
-  compression: string;
-  snapshotRetention: number;
+export interface FirecrackerConfig {
+  binaryPath: string;
+  kernelPath: string;
+  rootfsPath: string;
+  defaultVcpuCount: number;
+  defaultMemSizeMb: number;
 }
 
-export interface TenantsConfig {
-  uidStart: number;
+export interface NetworkConfig {
+  bridgeName: string;
+  subnetBase: string;
+  subnetMask: number;
   gatewayPortStart: number;
-  homeBase: string;
+}
+
+export interface CaddyConfig {
+  adminApi: string;
+  domain: string;
+}
+
+export interface VsockConfig {
+  agentPort: number;
+  connectTimeoutMs: number;
+  healthPort: number;
+}
+
+export interface OverlayConfig {
+  baseDir: string;
+  defaultSizeMb: number;
+  snapshotRetention: number;
 }
 
 export interface WatchdogConfig {
@@ -70,8 +92,11 @@ export interface OpenclawConfig {
 }
 
 export interface LobsterdConfig {
-  zfs: ZfsConfig;
-  tenants: TenantsConfig;
+  firecracker: FirecrackerConfig;
+  network: NetworkConfig;
+  caddy: CaddyConfig;
+  vsock: VsockConfig;
+  overlay: OverlayConfig;
   watchdog: WatchdogConfig;
   openclaw: OpenclawConfig;
 }
@@ -80,7 +105,8 @@ export interface LobsterdConfig {
 
 export interface TenantRegistry {
   tenants: Tenant[];
-  nextUid: number;
+  nextCid: number;
+  nextSubnetIndex: number;
   nextGatewayPort: number;
 }
 
@@ -97,21 +123,18 @@ export type ErrorCode =
   | 'EXEC_TIMEOUT'
   | 'NOT_ROOT'
   | 'NOT_LINUX'
-  | 'ZFS_NOT_AVAILABLE'
-  | 'ZFS_DATASET_EXISTS'
-  | 'ZFS_DATASET_NOT_FOUND'
-  | 'USER_EXISTS'
-  | 'USER_NOT_FOUND'
-  | 'DOCKER_NOT_INSTALLED'
-  | 'DOCKER_UNRESPONSIVE'
+  | 'KVM_NOT_AVAILABLE'
+  | 'FIRECRACKER_NOT_FOUND'
+  | 'VM_BOOT_FAILED'
+  | 'VSOCK_CONNECT_FAILED'
+  | 'TAP_CREATE_FAILED'
+  | 'CADDY_API_ERROR'
+  | 'OVERLAY_CREATE_FAILED'
   | 'CONFIG_NOT_FOUND'
   | 'CONFIG_INVALID'
   | 'TENANT_EXISTS'
   | 'TENANT_NOT_FOUND'
-  | 'GATEWAY_UNRESPONSIVE'
-  | 'SERVICE_FAILED'
   | 'PERMISSION_DENIED'
-  | 'FIREWALL_FAILED'
   | 'VALIDATION_FAILED'
   | 'LOCK_FAILED'
   | 'UNKNOWN';

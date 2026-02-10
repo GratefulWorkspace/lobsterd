@@ -17,16 +17,16 @@ const program = new Command();
 
 program
   .name('lobster')
-  .description('🦞 lobsterd — Multi-Tenant OpenClaw Watchdog & Orchestrator')
-  .version('0.1.0');
+  .description('lobsterd — Firecracker MicroVM Tenant Orchestrator')
+  .version('0.2.0');
 
 // ── init ──────────────────────────────────────────────────────────────────────
 
 program
   .command('init')
-  .description('Initialize host (check kernel, deps, ZFS pool)')
+  .description('Initialize host (check KVM, Firecracker, kernel, rootfs; configure Caddy)')
   .action(async () => {
-    console.log('🦞 Initializing lobsterd host...');
+    console.log('Initializing lobsterd host...');
     const result = await runInit();
 
     if (result.isErr()) {
@@ -35,20 +35,22 @@ program
     }
 
     const r = result.value;
-    console.log(`  Kernel: ${r.kernel}`);
-    console.log(`  ZFS: ${r.zfsAvailable ? 'available' : 'not found'}`);
-    console.log(`  Parent dataset: ${r.parentDatasetCreated ? 'created' : 'already exists'}`);
-    console.log(`  Config: ${r.configCreated ? 'written' : 'already exists'}`);
-    console.log('\n● Host initialized successfully.');
+    console.log(`  KVM: ${r.kvmAvailable ? 'available' : 'not found'}`);
+    console.log(`  Firecracker: ${r.firecrackerFound ? 'found' : 'not found'}`);
+    console.log(`  Kernel: ${r.kernelFound ? 'found' : 'not found'}`);
+    console.log(`  Rootfs: ${r.rootfsFound ? 'found' : 'not found'}`);
+    console.log(`  IP forwarding: ${r.ipForwardingEnabled ? 'enabled' : 'failed'}`);
+    console.log(`  Caddy: ${r.caddyConfigured ? 'configured' : 'failed'}`);
+    console.log('\nHost initialized successfully.');
   });
 
 // ── spawn ─────────────────────────────────────────────────────────────────────
 
 program
   .command('spawn <name>')
-  .description('Add a new tenant')
+  .description('Add a new tenant (Firecracker microVM)')
   .action(async (name: string) => {
-    console.log(`🦞 Spawning tenant "${name}"...`);
+    console.log(`Spawning tenant "${name}"...`);
     const result = await runSpawn(name, (p) => {
       console.log(`  [${p.step}] ${p.detail}`);
     });
@@ -59,8 +61,8 @@ program
     }
 
     const t = result.value;
-    console.log(`\n● Tenant "${t.name}" spawned successfully.`);
-    console.log(`  UID: ${t.uid}  Port: ${t.gatewayPort}  Home: ${t.homePath}`);
+    console.log(`\nTenant "${t.name}" spawned successfully.`);
+    console.log(`  CID: ${t.cid}  IP: ${t.ipAddress}  Port: ${t.gatewayPort}  PID: ${t.vmPid}`);
   });
 
 // ── evict ─────────────────────────────────────────────────────────────────────
@@ -71,7 +73,7 @@ program
   .option('-y, --yes', 'Skip confirmation')
   .action(async (name: string, opts: { yes?: boolean }) => {
     if (!opts.yes) {
-      process.stdout.write(`Remove tenant "${name}"? This destroys all data. [y/N] `);
+      process.stdout.write(`Remove tenant "${name}"? This destroys the VM and all data. [y/N] `);
       const response = await new Promise<string>((resolve) => {
         process.stdin.setEncoding('utf8');
         process.stdin.once('data', (data) => resolve(data.toString().trim()));
@@ -83,7 +85,7 @@ program
       }
     }
 
-    console.log(`🦞 Evicting tenant "${name}"...`);
+    console.log(`Evicting tenant "${name}"...`);
     const result = await runEvict(name, (p) => {
       console.log(`  [${p.step}] ${p.detail}`);
     });
@@ -93,7 +95,7 @@ program
       process.exit(1);
     }
 
-    console.log(`\n● Tenant "${name}" evicted.`);
+    console.log(`\nTenant "${name}" evicted.`);
   });
 
 // ── molt ──────────────────────────────────────────────────────────────────────
@@ -103,7 +105,7 @@ program
   .description('Idempotent repair — one tenant or all')
   .action(async (name?: string) => {
     const target = name ? `tenant "${name}"` : 'all tenants';
-    console.log(`🦞 Molting ${target}...`);
+    console.log(`Molting ${target}...`);
 
     const result = await runMolt(name, (p) => {
       console.log(`  [${p.tenant}] ${p.phase}${p.detail ? `: ${p.detail}` : ''}`);
@@ -116,7 +118,6 @@ program
 
     const results = result.value;
     const { unmount } = render(<MoltResults results={results} />);
-    // Give Ink a frame to render, then unmount
     await new Promise((r) => setTimeout(r, 100));
     unmount();
 
@@ -149,7 +150,7 @@ program
 
 program
   .command('snap <name>')
-  .description('Take ZFS snapshot')
+  .description('Snapshot overlay file')
   .option('--prune', 'Prune old snapshots beyond retention')
   .action(async (name: string, opts: { prune?: boolean }) => {
     const result = await runSnap(name, opts);
@@ -159,7 +160,7 @@ program
       process.exit(1);
     }
 
-    console.log(`● Snapshot created: ${result.value}`);
+    console.log(`Snapshot created: ${result.value}`);
   });
 
 // ── watch ─────────────────────────────────────────────────────────────────────
@@ -188,7 +189,7 @@ program
 program
   .command('logs <name>')
   .description('Stream tenant logs')
-  .option('-s, --service <service>', 'Service to stream logs for', 'openclaw-gateway')
+  .option('-s, --service <service>', 'Service to stream logs for')
   .action(async (name: string, opts: { service?: string }) => {
     const code = await runLogs(name, opts);
     process.exit(code);

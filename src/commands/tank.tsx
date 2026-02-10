@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { render, Box, Text } from 'ink';
-import type { Tenant, TenantWatchState, HealthCheckResult } from '../types/index.js';
+import type { Tenant, TenantWatchState, HealthCheckResult, LobsterdConfig } from '../types/index.js';
 import { loadConfig, loadRegistry } from '../config/loader.js';
 import { runAllChecks } from '../checks/index.js';
 import { initialWatchState } from '../watchdog/state.js';
 import { transition } from '../watchdog/state.js';
 import { Dashboard } from '../ui/Dashboard.js';
 
-function TankApp({ tenants, config }: { tenants: Tenant[]; config: { watchdog: { maxRepairAttempts: number; repairCooldownMs: number; intervalMs: number } } }) {
+function TankApp({ tenants, config }: { tenants: Tenant[]; config: LobsterdConfig }) {
   const [states, setStates] = useState<Record<string, TenantWatchState>>(() => {
     const s: Record<string, TenantWatchState> = {};
     for (const t of tenants) s[t.name] = initialWatchState();
@@ -22,7 +22,7 @@ function TankApp({ tenants, config }: { tenants: Tenant[]; config: { watchdog: {
     async function check() {
       for (const tenant of tenants) {
         if (cancelled) break;
-        const result = await runAllChecks(tenant);
+        const result = await runAllChecks(tenant, config);
         if (result.isOk() && !cancelled) {
           setStates((prev) => {
             const current = prev[tenant.name] ?? initialWatchState();
@@ -44,7 +44,7 @@ function TankApp({ tenants, config }: { tenants: Tenant[]; config: { watchdog: {
   if (checking) {
     return (
       <Box padding={1}>
-        <Text>🦞 Checking tenant health...</Text>
+        <Text>Checking tenant health...</Text>
       </Box>
     );
   }

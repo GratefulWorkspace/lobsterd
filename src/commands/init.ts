@@ -1,11 +1,13 @@
-import { ok, err, errAsync, okAsync, ResultAsync } from 'neverthrow';
+import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { chmodSync } from 'node:fs';
 import type { LobsterError, LobsterdConfig } from '../types/index.js';
 import { exec, execUnchecked } from '../system/exec.js';
-import * as zfs from '../system/zfs.js';
-import * as firewall from '../system/firewall.js';
-import * as nginx from '../system/nginx.js';
-import { CONFIG_DIR, CONFIG_PATH, REGISTRY_PATH, DEFAULT_CONFIG, EMPTY_REGISTRY } from '../config/defaults.js';
+import * as network from '../system/network.js';
+import * as caddy from '../system/caddy.js';
+import {
+  CONFIG_DIR, CONFIG_PATH, REGISTRY_PATH, DEFAULT_CONFIG, EMPTY_REGISTRY,
+  LOBSTERD_BASE, OVERLAYS_DIR, SOCKETS_DIR, KERNELS_DIR,
+} from '../config/defaults.js';
 
 function checkLinux(): ResultAsync<void, LobsterError> {
   if (process.platform !== 'linux') {
@@ -21,31 +23,70 @@ function checkRoot(): ResultAsync<void, LobsterError> {
   return okAsync(undefined);
 }
 
-function checkKernel(): ResultAsync<string, LobsterError> {
-  return exec(['uname', '-r']).map((r) => {
-    const version = r.stdout.trim();
-    const [major, minor] = version.split('.').map(Number);
-    if (major < 5 || (major === 5 && minor < 11)) {
-      throw new Error(`Kernel ${version} too old — need >= 5.11 for rootless Docker features`);
-    }
-    return version;
-  });
+function checkKvm(): ResultAsync<void, LobsterError> {
+  return ResultAsync.fromPromise(
+    (async () => {
+      const devKvm = Bun.file('/dev/kvm');
+      if (!(await devKvm.exists())) {
+        throw new Error('/dev/kvm not found — KVM not available. Enable hardware virtualization in BIOS.');
+      }
+    })(),
+    (e) => ({
+      code: 'KVM_NOT_AVAILABLE' as const,
+      message: e instanceof Error ? e.message : '/dev/kvm not accessible',
+      cause: e,
+    }),
+  );
 }
 
-function checkDocker(): ResultAsync<void, LobsterError> {
-  return execUnchecked(['which', 'dockerd']).andThen((r) => {
+function checkFirecracker(config: LobsterdConfig): ResultAsync<void, LobsterError> {
+  return execUnchecked(['test', '-x', config.firecracker.binaryPath]).andThen((r) => {
     if (r.exitCode !== 0) {
-      return errAsync<void, LobsterError>({ code: 'DOCKER_NOT_INSTALLED', message: 'Docker is not installed. Install Docker Engine first.' });
+      return errAsync<void, LobsterError>({
+        code: 'FIRECRACKER_NOT_FOUND',
+        message: `Firecracker binary not found at ${config.firecracker.binaryPath}`,
+      });
     }
     return okAsync(undefined);
   });
 }
 
-function ensureConfigDir(): ResultAsync<void, LobsterError> {
-  return exec(['mkdir', '-p', CONFIG_DIR]).andThen(() => {
-    chmodSync(CONFIG_DIR, 0o700);
-    return okAsync(undefined);
-  });
+function checkKernel(config: LobsterdConfig): ResultAsync<void, LobsterError> {
+  return ResultAsync.fromPromise(
+    (async () => {
+      if (!(await Bun.file(config.firecracker.kernelPath).exists())) {
+        throw new Error(`Kernel image not found at ${config.firecracker.kernelPath}`);
+      }
+    })(),
+    (e) => ({
+      code: 'FIRECRACKER_NOT_FOUND' as const,
+      message: e instanceof Error ? e.message : 'Kernel image not found',
+      cause: e,
+    }),
+  );
+}
+
+function checkRootfs(config: LobsterdConfig): ResultAsync<void, LobsterError> {
+  return ResultAsync.fromPromise(
+    (async () => {
+      if (!(await Bun.file(config.firecracker.rootfsPath).exists())) {
+        throw new Error(`Root filesystem not found at ${config.firecracker.rootfsPath}`);
+      }
+    })(),
+    (e) => ({
+      code: 'FIRECRACKER_NOT_FOUND' as const,
+      message: e instanceof Error ? e.message : 'Rootfs image not found',
+      cause: e,
+    }),
+  );
+}
+
+function ensureDirs(): ResultAsync<void, LobsterError> {
+  return exec(['mkdir', '-p', CONFIG_DIR, LOBSTERD_BASE, OVERLAYS_DIR, SOCKETS_DIR, KERNELS_DIR])
+    .andThen(() => {
+      chmodSync(CONFIG_DIR, 0o700);
+      return okAsync(undefined);
+    });
 }
 
 async function fileExists(path: string): Promise<boolean> {
@@ -76,86 +117,64 @@ function writeEmptyRegistry(): ResultAsync<void, LobsterError> {
   );
 }
 
-function hardenProcfs(): ResultAsync<void, LobsterError> {
-  return execUnchecked(['mount', '-o', 'remount,hidepid=invisible', '/proc']).andThen((r) => {
-    if (r.exitCode === 0) return okAsync(undefined);
-    // Fall back to hidepid=2 on older kernels
-    return exec(['mount', '-o', 'remount,hidepid=2', '/proc']).map(() => undefined);
-  });
-}
-
 export interface InitResult {
-  kernel: string;
-  zfsAvailable: boolean;
-  parentDatasetCreated: boolean;
+  kvmAvailable: boolean;
+  firecrackerFound: boolean;
+  kernelFound: boolean;
+  rootfsFound: boolean;
+  dirsCreated: boolean;
   configCreated: boolean;
-  procfsHardened: boolean;
-  firewallInitialized: boolean;
-  nginxConfigured: boolean;
+  ipForwardingEnabled: boolean;
+  caddyConfigured: boolean;
 }
 
 export function runInit(config: LobsterdConfig = DEFAULT_CONFIG): ResultAsync<InitResult, LobsterError> {
   const result: InitResult = {
-    kernel: '',
-    zfsAvailable: false,
-    parentDatasetCreated: false,
+    kvmAvailable: false,
+    firecrackerFound: false,
+    kernelFound: false,
+    rootfsFound: false,
+    dirsCreated: false,
     configCreated: false,
-    procfsHardened: false,
-    firewallInitialized: false,
-    nginxConfigured: false,
+    ipForwardingEnabled: false,
+    caddyConfigured: false,
   };
 
   return checkLinux()
     .andThen(() => checkRoot())
-    .andThen(() => checkKernel())
-    .andThen((kernel) => {
-      result.kernel = kernel;
-      return zfs.isZfsAvailable();
+    .andThen(() => checkKvm())
+    .andThen(() => {
+      result.kvmAvailable = true;
+      return checkFirecracker(config);
     })
-    .andThen((available): ResultAsync<void, LobsterError> => {
-      result.zfsAvailable = available;
-      if (!available) {
-        return errAsync({
-          code: 'ZFS_NOT_AVAILABLE',
-          message: 'ZFS is not available. Install ZFS and create a pool first.',
-        });
-      }
-      return okAsync(undefined);
+    .andThen(() => {
+      result.firecrackerFound = true;
+      return checkKernel(config);
     })
-    .andThen(() => zfs.datasetExists(config.zfs.parentDataset))
-    .andThen((exists): ResultAsync<void, LobsterError> => {
-      if (!exists) {
-        result.parentDatasetCreated = true;
-        return zfs.createDataset(config.zfs.parentDataset, {
-          compression: config.zfs.compression,
-        });
-      }
-      return okAsync(undefined);
+    .andThen(() => {
+      result.kernelFound = true;
+      return checkRootfs(config);
     })
-    .andThen(() => checkDocker())
-    .andThen(() => ensureConfigDir())
-    .andThen(() => writeDefaultConfig())
+    .andThen(() => {
+      result.rootfsFound = true;
+      return ensureDirs();
+    })
+    .andThen(() => {
+      result.dirsCreated = true;
+      return writeDefaultConfig();
+    })
+    .andThen(() => writeEmptyRegistry())
     .andThen(() => {
       result.configCreated = true;
-      return writeEmptyRegistry();
-    })
-    .andThen(() => hardenProcfs())
-    .andThen(() => {
-      result.procfsHardened = true;
-      return firewall.initFirewall();
+      return network.enableIpForwarding();
     })
     .andThen(() => {
-      result.firewallInitialized = true;
-      return nginx.ensureNginxInstalled();
+      result.ipForwardingEnabled = true;
+      return caddy.ensureCaddyRunning();
     })
-    .andThen(() => nginx.addFirewallBypass())
-    .andThen(() => exec(['mkdir', '-p', '/etc/lobsterd/nginx']))
-    .andThen(() => nginx.generateWildcardCert())
-    .andThen(() => nginx.writeBaseConfig())
-    .andThen(() => nginx.updateTenantMap(EMPTY_REGISTRY))
-    .andThen(() => nginx.ensureNginxRunning())
+    .andThen(() => caddy.writeCaddyBaseConfig(config.caddy.adminApi, config.caddy.domain))
     .map(() => {
-      result.nginxConfigured = true;
+      result.caddyConfigured = true;
       return result;
     });
 }
