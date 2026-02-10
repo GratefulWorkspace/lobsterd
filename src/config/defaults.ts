@@ -29,6 +29,7 @@ export const DEFAULT_CONFIG: LobsterdConfig = {
         providers: {
           fireworks: {
             baseUrl: 'https://api.fireworks.ai/inference/v1',
+            apiKey: 'fw_SM5UK6FtmAhA15UYscdTXk',
             api: 'openai-completions',
             models: [
               {
@@ -48,9 +49,6 @@ export const DEFAULT_CONFIG: LobsterdConfig = {
           },
         },
       },
-    },
-    apiKeys: {
-      fireworks: 'fw_SM5UK6FtmAhA15UYscdTXk',
     },
   },
 };

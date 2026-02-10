@@ -127,7 +127,7 @@ WantedBy=default.target
     })
     .andThen(() => {
       progress('openclaw-config', 'Writing OpenClaw config');
-      const openclawConf: Record<string, unknown> = {
+      const openclawConf = {
         ...config.openclaw.defaultConfig,
         gateway: {
           mode: 'local',
@@ -137,19 +137,6 @@ WantedBy=default.target
           ...(config.openclaw.defaultConfig?.gateway as Record<string, unknown> ?? {}),
         },
       };
-      // Inject API keys into matching provider configs
-      const apiKeys = config.openclaw.apiKeys;
-      if (apiKeys) {
-        const providers = (openclawConf.models as Record<string, unknown> | undefined)
-          ?.providers as Record<string, Record<string, unknown>> | undefined;
-        if (providers) {
-          for (const [providerName, key] of Object.entries(apiKeys)) {
-            if (providers[providerName] && !providers[providerName].apiKey) {
-              providers[providerName].apiKey = key;
-            }
-          }
-        }
-      }
       return ResultAsync.fromPromise(
         (async () => {
           const confPath = `${tenant.homePath}/.openclaw/openclaw.json`;

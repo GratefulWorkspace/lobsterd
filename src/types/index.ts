@@ -67,7 +67,6 @@ export interface WatchdogConfig {
 export interface OpenclawConfig {
   installPath: string;
   defaultConfig: Record<string, unknown>;
-  apiKeys?: Record<string, string>;
 }
 
 export interface LobsterdConfig {
