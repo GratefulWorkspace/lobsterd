@@ -1,6 +1,6 @@
 import { ResultAsync } from 'neverthrow';
 import { Socket } from 'net';
-import type { LobsterError } from '../types/index.js';
+import type { LobsterError, GuestStats } from '../types/index.js';
 
 function tcpSend(host: string, port: number, payload: string, timeoutMs: number): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -103,6 +103,20 @@ export function healthPing(guestIp: string, port: number): ResultAsync<boolean, 
     () => ({
       code: 'VSOCK_CONNECT_FAILED' as const,
       message: `Health ping failed for ${guestIp}`,
+    }),
+  );
+}
+
+export function getStats(guestIp: string, port: number): ResultAsync<GuestStats, LobsterError> {
+  const payload = JSON.stringify({ type: 'get-stats' });
+  return ResultAsync.fromPromise(
+    (async () => {
+      const response = await tcpSend(guestIp, port, payload + '\n', 3000);
+      return JSON.parse(response.trim()) as GuestStats;
+    })(),
+    () => ({
+      code: 'VSOCK_CONNECT_FAILED' as const,
+      message: `Stats request failed for ${guestIp}`,
     }),
   );
 }

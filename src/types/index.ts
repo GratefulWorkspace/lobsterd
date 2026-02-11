@@ -107,6 +107,13 @@ export interface LobsterdConfig {
   openclaw: OpenclawConfig;
 }
 
+// ── Guest Stats ─────────────────────────────────────────────────────────────
+
+export interface GuestStats {
+  gatewayPid: number | null;
+  memoryKb: number;
+}
+
 // ── Registry ─────────────────────────────────────────────────────────────────
 
 export interface TenantRegistry {

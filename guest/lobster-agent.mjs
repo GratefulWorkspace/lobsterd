@@ -68,6 +68,8 @@ function handleMessage(msg) {
       return 'PONG';
     case 'launch-openclaw':
       return handleLaunchOpenclaw();
+    case 'get-stats':
+      return handleGetStats();
     case 'get-logs':
       try { return readFileSync('/tmp/openclaw-gateway.log', 'utf-8').slice(-4000); }
       catch { return 'No logs available'; }
@@ -132,6 +134,20 @@ function handleLaunchOpenclaw() {
 
   console.log(`[lobster-agent] Launched OpenClaw gateway (PID ${gatewayProcess.pid})`);
   return JSON.stringify({ status: 'launched', pid: gatewayProcess.pid });
+}
+
+function handleGetStats() {
+  if (!gatewayProcess || !gatewayProcess.pid) {
+    return JSON.stringify({ gatewayPid: null, memoryKb: 0 });
+  }
+  try {
+    const status = readFileSync(`/proc/${gatewayProcess.pid}/status`, 'utf-8');
+    const match = status.match(/^VmRSS:\s+(\d+)\s+kB$/m);
+    const memoryKb = match ? parseInt(match[1], 10) : 0;
+    return JSON.stringify({ gatewayPid: gatewayProcess.pid, memoryKb });
+  } catch {
+    return JSON.stringify({ gatewayPid: gatewayProcess.pid, memoryKb: 0 });
+  }
 }
 
 function handleShutdown() {

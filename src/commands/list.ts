@@ -1,6 +1,7 @@
-import { ResultAsync, okAsync } from 'neverthrow';
+import { ResultAsync } from 'neverthrow';
 import type { LobsterError, Tenant } from '../types/index.js';
-import { loadRegistry } from '../config/loader.js';
+import { loadConfig, loadRegistry } from '../config/loader.js';
+import * as vsock from '../system/vsock.js';
 
 export interface TenantListEntry {
   name: string;
@@ -9,6 +10,7 @@ export interface TenantListEntry {
   port: number;
   vmPid: string;
   status: string;
+  memoryMb?: number;
 }
 
 function quickCheck(tenant: Tenant): TenantListEntry {
@@ -35,16 +37,45 @@ function quickCheck(tenant: Tenant): TenantListEntry {
 export function runList(
   opts: { json?: boolean } = {},
 ): ResultAsync<TenantListEntry[], LobsterError> {
-  return loadRegistry().map((registry) =>
-    registry.tenants.map((t) => quickCheck(t)),
+  return loadConfig().andThen((config) =>
+    loadRegistry().andThen((registry) => {
+      const entries = registry.tenants.map((t) => quickCheck(t));
+
+      const statsPromises = entries.map((entry, i) => {
+        if (entry.vmPid === 'dead') return Promise.resolve();
+        const tenant = registry.tenants[i];
+        return vsock
+          .getStats(tenant.ipAddress, config.vsock.agentPort)
+          .map((stats) => {
+            entry.memoryMb = stats.memoryKb > 0 ? Math.round(stats.memoryKb / 1024) : undefined;
+          })
+          .unwrapOr(undefined);
+      });
+
+      return ResultAsync.fromPromise(
+        Promise.all(statsPromises).then(() => entries),
+        () => ({
+          code: 'VSOCK_CONNECT_FAILED' as const,
+          message: 'Failed to collect stats',
+        }),
+      );
+    }),
   );
 }
 
 export function formatTable(entries: TenantListEntry[]): string {
   if (entries.length === 0) return 'No tenants registered.';
 
-  const header = ['NAME', 'CID', 'IP', 'PORT', 'PID', 'STATUS'];
-  const rows = entries.map((e) => [e.name, String(e.cid), e.ip, String(e.port), e.vmPid, e.status]);
+  const header = ['NAME', 'CID', 'IP', 'PORT', 'PID', 'STATUS', 'MEM'];
+  const rows = entries.map((e) => [
+    e.name,
+    String(e.cid),
+    e.ip,
+    String(e.port),
+    e.vmPid,
+    e.status,
+    e.memoryMb != null ? `${e.memoryMb}M` : '--',
+  ]);
 
   const widths = header.map((h, i) =>
     Math.max(h.length, ...rows.map((r) => r[i].length)),
