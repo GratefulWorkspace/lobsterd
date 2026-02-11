@@ -15,7 +15,7 @@ export const DEFAULT_CONFIG: LobsterdConfig = {
     kernelPath: `${KERNELS_DIR}/vmlinux`,
     rootfsPath: `${LOBSTERD_BASE}/rootfs.ext4`,
     defaultVcpuCount: 2,
-    defaultMemSizeMb: 512,
+    defaultMemSizeMb: 2048,
   },
   network: {
     bridgeName: 'lobster0',
@@ -46,6 +46,7 @@ export const DEFAULT_CONFIG: LobsterdConfig = {
     installPath: '/opt/openclaw',
     defaultConfig: {
       gateway: {
+        mode: 'local',
         bind: 'lan',
         auth: {
           mode: 'token',
