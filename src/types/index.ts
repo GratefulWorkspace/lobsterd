@@ -16,6 +16,8 @@ export interface Tenant {
   createdAt: string;
   status: TenantStatus;
   gatewayToken: string;
+  jailUid: number;
+  agentToken: string;
 }
 
 // ── Health ───────────────────────────────────────────────────────────────────
@@ -48,12 +50,36 @@ export interface TenantWatchState {
 
 // ── Config ───────────────────────────────────────────────────────────────────
 
+// ── Rate Limiting ───────────────────────────────────────────────────────────
+
+export interface TokenBucket {
+  size: number;
+  oneTimeBurst?: number;
+  refillTime: number;
+}
+
+export interface RateLimiter {
+  bandwidth?: TokenBucket;
+  ops?: TokenBucket;
+}
+
+// ── Config ──────────────────────────────────────────────────────────────────
+
+export interface JailerConfig {
+  binaryPath: string;
+  chrootBaseDir: string;
+  uidStart: number;
+}
+
 export interface FirecrackerConfig {
   binaryPath: string;
   kernelPath: string;
   rootfsPath: string;
   defaultVcpuCount: number;
   defaultMemSizeMb: number;
+  networkRxRateLimit?: RateLimiter;
+  networkTxRateLimit?: RateLimiter;
+  diskRateLimit?: RateLimiter;
 }
 
 export interface NetworkConfig {
@@ -98,6 +124,7 @@ export interface OpenclawConfig {
 }
 
 export interface LobsterdConfig {
+  jailer: JailerConfig;
   firecracker: FirecrackerConfig;
   network: NetworkConfig;
   caddy: CaddyConfig;
@@ -121,6 +148,7 @@ export interface TenantRegistry {
   nextCid: number;
   nextSubnetIndex: number;
   nextGatewayPort: number;
+  nextJailUid: number;
 }
 
 // ── Exec ─────────────────────────────────────────────────────────────────────
@@ -138,6 +166,8 @@ export type ErrorCode =
   | 'NOT_LINUX'
   | 'KVM_NOT_AVAILABLE'
   | 'FIRECRACKER_NOT_FOUND'
+  | 'JAILER_NOT_FOUND'
+  | 'JAILER_SETUP_FAILED'
   | 'VM_BOOT_FAILED'
   | 'VSOCK_CONNECT_FAILED'
   | 'TAP_CREATE_FAILED'

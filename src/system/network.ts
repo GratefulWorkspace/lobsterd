@@ -72,6 +72,106 @@ export function removeNat(tapName: string, guestIp: string, gatewayPort: number)
     .map(() => undefined);
 }
 
+/** Add INPUT and FORWARD rules to isolate a guest from the host and other tenants. */
+export function addIsolationRules(tapName: string): ResultAsync<void, LobsterError> {
+  const comment = (suffix: string) => ['-m', 'comment', '--comment', `lobster:${tapName}:${suffix}`];
+
+  // INPUT: allow established/related responses back to host (for host-initiated connections)
+  return exec([
+    'iptables', '-A', 'INPUT', '-i', tapName,
+    '-m', 'conntrack', '--ctstate', 'ESTABLISHED,RELATED',
+    '-j', 'ACCEPT', ...comment('host-return'),
+  ])
+    // INPUT: block all guest-initiated connections to the host
+    .andThen(() => exec([
+      'iptables', '-A', 'INPUT', '-i', tapName,
+      '-j', 'DROP', ...comment('block-host'),
+    ]))
+    // FORWARD: allow established/related responses back to guest
+    .andThen(() => exec([
+      'iptables', '-A', 'FORWARD', '-o', tapName,
+      '-m', 'conntrack', '--ctstate', 'ESTABLISHED,RELATED',
+      '-j', 'ACCEPT', ...comment('return'),
+    ]))
+    // FORWARD: allow new DNAT'd inbound connections to guest gateway
+    .andThen(() => exec([
+      'iptables', '-A', 'FORWARD', '-o', tapName,
+      '-p', 'tcp', '--dport', String(GUEST_GATEWAY_PORT),
+      '-m', 'conntrack', '--ctstate', 'NEW',
+      '-j', 'ACCEPT', ...comment('gateway-in'),
+    ]))
+    // FORWARD: block guest from reaching RFC1918 private networks
+    .andThen(() => exec([
+      'iptables', '-A', 'FORWARD', '-i', tapName,
+      '-d', '10.0.0.0/8', '-j', 'DROP', ...comment('block-rfc1918'),
+    ]))
+    .andThen(() => exec([
+      'iptables', '-A', 'FORWARD', '-i', tapName,
+      '-d', '172.16.0.0/12', '-j', 'DROP', ...comment('block-rfc1918'),
+    ]))
+    .andThen(() => exec([
+      'iptables', '-A', 'FORWARD', '-i', tapName,
+      '-d', '192.168.0.0/16', '-j', 'DROP', ...comment('block-rfc1918'),
+    ]))
+    .andThen(() => exec([
+      'iptables', '-A', 'FORWARD', '-i', tapName,
+      '-d', '169.254.0.0/16', '-j', 'DROP', ...comment('block-link-local'),
+    ]))
+    // FORWARD: allow guest outbound to internet
+    .andThen(() => exec([
+      'iptables', '-A', 'FORWARD', '-i', tapName,
+      '-j', 'ACCEPT', ...comment('outbound'),
+    ]))
+    .map(() => undefined);
+}
+
+/** Remove INPUT and FORWARD isolation rules for a tenant. */
+export function removeIsolationRules(tapName: string): ResultAsync<void, LobsterError> {
+  const comment = (suffix: string) => ['-m', 'comment', '--comment', `lobster:${tapName}:${suffix}`];
+
+  return exec([
+    'iptables', '-D', 'INPUT', '-i', tapName,
+    '-m', 'conntrack', '--ctstate', 'ESTABLISHED,RELATED',
+    '-j', 'ACCEPT', ...comment('host-return'),
+  ]).orElse(() => okAsync({ exitCode: 0, stdout: '', stderr: '' }))
+    .andThen(() => exec([
+      'iptables', '-D', 'INPUT', '-i', tapName,
+      '-j', 'DROP', ...comment('block-host'),
+    ]).orElse(() => okAsync({ exitCode: 0, stdout: '', stderr: '' })))
+    .andThen(() => exec([
+      'iptables', '-D', 'FORWARD', '-o', tapName,
+      '-m', 'conntrack', '--ctstate', 'ESTABLISHED,RELATED',
+      '-j', 'ACCEPT', ...comment('return'),
+    ]).orElse(() => okAsync({ exitCode: 0, stdout: '', stderr: '' })))
+    .andThen(() => exec([
+      'iptables', '-D', 'FORWARD', '-o', tapName,
+      '-p', 'tcp', '--dport', String(GUEST_GATEWAY_PORT),
+      '-m', 'conntrack', '--ctstate', 'NEW',
+      '-j', 'ACCEPT', ...comment('gateway-in'),
+    ]).orElse(() => okAsync({ exitCode: 0, stdout: '', stderr: '' })))
+    .andThen(() => exec([
+      'iptables', '-D', 'FORWARD', '-i', tapName,
+      '-d', '10.0.0.0/8', '-j', 'DROP', ...comment('block-rfc1918'),
+    ]).orElse(() => okAsync({ exitCode: 0, stdout: '', stderr: '' })))
+    .andThen(() => exec([
+      'iptables', '-D', 'FORWARD', '-i', tapName,
+      '-d', '172.16.0.0/12', '-j', 'DROP', ...comment('block-rfc1918'),
+    ]).orElse(() => okAsync({ exitCode: 0, stdout: '', stderr: '' })))
+    .andThen(() => exec([
+      'iptables', '-D', 'FORWARD', '-i', tapName,
+      '-d', '192.168.0.0/16', '-j', 'DROP', ...comment('block-rfc1918'),
+    ]).orElse(() => okAsync({ exitCode: 0, stdout: '', stderr: '' })))
+    .andThen(() => exec([
+      'iptables', '-D', 'FORWARD', '-i', tapName,
+      '-d', '169.254.0.0/16', '-j', 'DROP', ...comment('block-link-local'),
+    ]).orElse(() => okAsync({ exitCode: 0, stdout: '', stderr: '' })))
+    .andThen(() => exec([
+      'iptables', '-D', 'FORWARD', '-i', tapName,
+      '-j', 'ACCEPT', ...comment('outbound'),
+    ]).orElse(() => okAsync({ exitCode: 0, stdout: '', stderr: '' })))
+    .map(() => undefined);
+}
+
 export function enableIpForwarding(): ResultAsync<void, LobsterError> {
   return exec(['sysctl', '-w', 'net.ipv4.ip_forward=1']).map(() => undefined);
 }

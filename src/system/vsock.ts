@@ -13,7 +13,6 @@ function tcpSend(host: string, port: number, payload: string, timeoutMs: number)
 
     socket.connect(port, host, () => {
       socket.write(payload);
-      // Don't call socket.end() — the server processes on newline and closes the connection
     });
     socket.on('data', (chunk) => { response += chunk.toString(); });
     socket.on('end', () => {
@@ -76,8 +75,9 @@ export function injectSecrets(
   guestIp: string,
   port: number,
   secrets: Record<string, string>,
+  agentToken: string,
 ): ResultAsync<void, LobsterError> {
-  const payload = JSON.stringify({ type: 'inject-secrets', secrets });
+  const payload = JSON.stringify({ type: 'inject-secrets', token: agentToken, secrets });
   return ResultAsync.fromPromise(
     (async () => {
       const response = await tcpSend(guestIp, port, payload + '\n', 5000);
@@ -93,8 +93,8 @@ export function injectSecrets(
   );
 }
 
-export function healthPing(guestIp: string, port: number): ResultAsync<boolean, LobsterError> {
-  const payload = JSON.stringify({ type: 'health-ping' });
+export function healthPing(guestIp: string, port: number, agentToken: string): ResultAsync<boolean, LobsterError> {
+  const payload = JSON.stringify({ type: 'health-ping', token: agentToken });
   return ResultAsync.fromPromise(
     (async () => {
       const response = await tcpSend(guestIp, port, payload + '\n', 5000);
@@ -107,8 +107,8 @@ export function healthPing(guestIp: string, port: number): ResultAsync<boolean, 
   );
 }
 
-export function getStats(guestIp: string, port: number): ResultAsync<GuestStats, LobsterError> {
-  const payload = JSON.stringify({ type: 'get-stats' });
+export function getStats(guestIp: string, port: number, agentToken: string): ResultAsync<GuestStats, LobsterError> {
+  const payload = JSON.stringify({ type: 'get-stats', token: agentToken });
   return ResultAsync.fromPromise(
     (async () => {
       const response = await tcpSend(guestIp, port, payload + '\n', 3000);
@@ -117,6 +117,20 @@ export function getStats(guestIp: string, port: number): ResultAsync<GuestStats,
     () => ({
       code: 'VSOCK_CONNECT_FAILED' as const,
       message: `Stats request failed for ${guestIp}`,
+    }),
+  );
+}
+
+export function getLogs(guestIp: string, port: number, agentToken: string): ResultAsync<string, LobsterError> {
+  const payload = JSON.stringify({ type: 'get-logs', token: agentToken });
+  return ResultAsync.fromPromise(
+    (async () => {
+      const response = await tcpSend(guestIp, port, payload + '\n', 5000);
+      return response;
+    })(),
+    () => ({
+      code: 'VSOCK_CONNECT_FAILED' as const,
+      message: `Log request failed for ${guestIp}`,
     }),
   );
 }

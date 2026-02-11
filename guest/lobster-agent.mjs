@@ -2,6 +2,7 @@
 
 // lobster-agent.mjs — In-VM agent for lobsterd Firecracker microVMs
 // Listens on TCP for host commands: inject-secrets, health-ping, launch-openclaw, shutdown
+// Authenticated via agent_token passed in kernel command line.
 
 import { createServer } from 'net';
 import { spawn } from 'child_process';
@@ -12,16 +13,49 @@ const HEALTH_PORT = 53;
 let gatewayProcess = null;
 let secrets = {};
 
+/** Parse a key=value parameter from /proc/cmdline */
+function parseCmdlineParam(key) {
+  try {
+    const cmdline = readFileSync('/proc/cmdline', 'utf-8').trim();
+    for (const param of cmdline.split(/\s+/)) {
+      const [k, ...rest] = param.split('=');
+      if (k === key) return rest.join('=');
+    }
+  } catch {}
+  return null;
+}
+
+/** Extract guest IP from kernel ip= parameter (ip=<client>::<gw>:<mask>::<dev>:off) */
+function parseGuestIp() {
+  const ipParam = parseCmdlineParam('ip');
+  if (ipParam) {
+    const guestIp = ipParam.split(':')[0];
+    if (guestIp && /^\d+\.\d+\.\d+\.\d+$/.test(guestIp)) return guestIp;
+  }
+  return '0.0.0.0'; // Fallback
+}
+
+const AGENT_TOKEN = parseCmdlineParam('agent_token');
+const BIND_ADDR = parseGuestIp();
+
+function validateToken(msg) {
+  if (!AGENT_TOKEN) return true; // No token configured, skip validation
+  return msg && msg.token === AGENT_TOKEN;
+}
+
 function startAgent() {
   const server = createServer({ allowHalfOpen: true }, (conn) => {
     let data = '';
     conn.on('error', () => {});
     conn.on('data', (chunk) => {
       data += chunk.toString();
-      // Process when we get a newline (message delimiter)
       if (data.includes('\n')) {
         try {
           const msg = JSON.parse(data.trim());
+          if (!validateToken(msg)) {
+            conn.end(JSON.stringify({ error: 'unauthorized' }) + '\n');
+            return;
+          }
           const response = handleMessage(msg);
           conn.end(response + '\n');
         } catch (e) {
@@ -30,10 +64,13 @@ function startAgent() {
       }
     });
     conn.on('end', () => {
-      // If no newline was received yet, try to process what we have
       if (data.length > 0 && !data.includes('\n')) {
         try {
           const msg = JSON.parse(data.trim());
+          if (!validateToken(msg)) {
+            conn.end(JSON.stringify({ error: 'unauthorized' }) + '\n');
+            return;
+          }
           const response = handleMessage(msg);
           conn.end(response + '\n');
         } catch (e) {
@@ -43,20 +80,31 @@ function startAgent() {
     });
   });
 
-  server.listen(VSOCK_PORT, '0.0.0.0', () => {
-    console.log(`[lobster-agent] Listening on 0.0.0.0:${VSOCK_PORT}`);
+  server.listen(VSOCK_PORT, BIND_ADDR, () => {
+    console.log(`[lobster-agent] Listening on ${BIND_ADDR}:${VSOCK_PORT}`);
   });
 
   // Health ping listener on separate port
   const healthServer = createServer((conn) => {
     conn.on('error', () => {});
-    conn.on('data', () => {
+    conn.on('data', (chunk) => {
+      try {
+        const msg = JSON.parse(chunk.toString().trim());
+        if (!validateToken(msg)) {
+          conn.end(JSON.stringify({ error: 'unauthorized' }) + '\n');
+          return;
+        }
+      } catch {
+        // Non-JSON ping, reject
+        conn.end(JSON.stringify({ error: 'unauthorized' }) + '\n');
+        return;
+      }
       conn.end('PONG\n');
     });
   });
 
-  healthServer.listen(HEALTH_PORT, '0.0.0.0', () => {
-    console.log(`[lobster-agent] Health listener on 0.0.0.0:${HEALTH_PORT}`);
+  healthServer.listen(HEALTH_PORT, BIND_ADDR, () => {
+    console.log(`[lobster-agent] Health listener on ${BIND_ADDR}:${HEALTH_PORT}`);
   });
 }
 

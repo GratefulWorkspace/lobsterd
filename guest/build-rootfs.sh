@@ -112,6 +112,23 @@ rm -rf "$MOUNT_DIR/opt/openclaw/node_modules/@node-llama-cpp" \
        "$MOUNT_DIR/opt/openclaw/node_modules/node-llama-cpp"
 rm -rf "$OPENCLAW_TMP"
 
+echo "==> Hardening guest — removing package manager and unnecessary tools"
+# Remove apk package manager to prevent tenants from installing attack tools
+chroot "$MOUNT_DIR" /bin/sh -c '
+  set -e
+  rm -f /sbin/apk /usr/bin/apk
+  rm -rf /etc/apk /var/cache/apk /lib/apk
+'
+# Remove curl, git, unzip (only needed during build, not at runtime)
+rm -f "$MOUNT_DIR/usr/bin/curl" "$MOUNT_DIR/usr/bin/git" "$MOUNT_DIR/usr/bin/unzip"
+rm -rf "$MOUNT_DIR/usr/libexec/git-core"
+# Remove wget if present
+rm -f "$MOUNT_DIR/usr/bin/wget"
+# Remove compilers and development tools
+rm -f "$MOUNT_DIR/usr/bin/cc" "$MOUNT_DIR/usr/bin/gcc" "$MOUNT_DIR/usr/bin/g++"
+# Lock root password (passwordless login was for build only; serial console is disabled)
+sed -i 's/^root::/root:!:/' "$MOUNT_DIR/etc/passwd"
+
 echo "==> Cleanup"
 umount "$MOUNT_DIR/proc" "$MOUNT_DIR/sys" "$MOUNT_DIR/dev"
 echo "nameserver 8.8.8.8" > "$MOUNT_DIR/etc/resolv.conf"

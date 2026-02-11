@@ -2,12 +2,32 @@ import { z } from 'zod';
 
 export const TENANT_NAME_REGEX = /^[a-z][a-z0-9_-]*$/;
 
+export const tokenBucketSchema = z.object({
+  size: z.number().int().min(0),
+  oneTimeBurst: z.number().int().min(0).optional(),
+  refillTime: z.number().int().min(1),
+});
+
+export const rateLimiterSchema = z.object({
+  bandwidth: tokenBucketSchema.optional(),
+  ops: tokenBucketSchema.optional(),
+});
+
+export const jailerConfigSchema = z.object({
+  binaryPath: z.string().min(1),
+  chrootBaseDir: z.string().min(1),
+  uidStart: z.number().int().min(1000),
+});
+
 export const firecrackerConfigSchema = z.object({
   binaryPath: z.string().min(1),
   kernelPath: z.string().min(1),
   rootfsPath: z.string().min(1),
   defaultVcpuCount: z.number().int().min(1).max(32),
   defaultMemSizeMb: z.number().int().min(128),
+  networkRxRateLimit: rateLimiterSchema.optional(),
+  networkTxRateLimit: rateLimiterSchema.optional(),
+  diskRateLimit: rateLimiterSchema.optional(),
 });
 
 export const networkConfigSchema = z.object({
@@ -52,6 +72,7 @@ export const openclawConfigSchema = z.object({
 });
 
 export const lobsterdConfigSchema = z.object({
+  jailer: jailerConfigSchema,
   firecracker: firecrackerConfigSchema,
   network: networkConfigSchema,
   caddy: caddyConfigSchema,
@@ -75,6 +96,8 @@ export const tenantSchema = z.object({
   createdAt: z.string().datetime(),
   status: z.enum(['active', 'suspended', 'removing']),
   gatewayToken: z.string().min(1),
+  jailUid: z.number().int().min(1000),
+  agentToken: z.string().min(1),
 });
 
 export const tenantRegistrySchema = z.object({
@@ -82,4 +105,5 @@ export const tenantRegistrySchema = z.object({
   nextCid: z.number().int().min(3),
   nextSubnetIndex: z.number().int().min(1),
   nextGatewayPort: z.number().int().min(1024).max(65535),
+  nextJailUid: z.number().int().min(1000),
 });

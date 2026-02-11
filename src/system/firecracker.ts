@@ -1,5 +1,20 @@
 import { ResultAsync } from 'neverthrow';
-import type { LobsterError } from '../types/index.js';
+import type { LobsterError, RateLimiter, TokenBucket } from '../types/index.js';
+
+function toFcBucket(bucket: TokenBucket): Record<string, unknown> {
+  return {
+    size: bucket.size,
+    one_time_burst: bucket.oneTimeBurst ?? 0,
+    refill_time: bucket.refillTime,
+  };
+}
+
+function toFcRateLimiter(limiter: RateLimiter): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (limiter.bandwidth) out.bandwidth = toFcBucket(limiter.bandwidth);
+  if (limiter.ops) out.ops = toFcBucket(limiter.ops);
+  return out;
+}
 
 function fcApi(socketPath: string, method: string, path: string, body?: unknown): ResultAsync<unknown, LobsterError> {
   return ResultAsync.fromPromise(
@@ -51,13 +66,18 @@ export function addDrive(
   driveId: string,
   pathOnHost: string,
   isReadOnly: boolean,
+  rateLimiter?: RateLimiter,
 ): ResultAsync<void, LobsterError> {
-  return fcApi(socketPath, 'PUT', `/drives/${driveId}`, {
+  const body: Record<string, unknown> = {
     drive_id: driveId,
     path_on_host: pathOnHost,
     is_root_device: driveId === 'rootfs',
     is_read_only: isReadOnly,
-  }).map(() => undefined);
+  };
+  if (rateLimiter) {
+    body.rate_limiter = toFcRateLimiter(rateLimiter);
+  }
+  return fcApi(socketPath, 'PUT', `/drives/${driveId}`, body).map(() => undefined);
 }
 
 export function addVsock(
@@ -66,7 +86,7 @@ export function addVsock(
 ): ResultAsync<void, LobsterError> {
   return fcApi(socketPath, 'PUT', '/vsock', {
     guest_cid: guestCid,
-    uds_path: `${socketPath}.vsock`,
+    uds_path: 'vsock.socket',
   }).map(() => undefined);
 }
 
@@ -74,11 +94,20 @@ export function addNetworkInterface(
   socketPath: string,
   ifaceId: string,
   hostDevName: string,
+  rxRateLimiter?: RateLimiter,
+  txRateLimiter?: RateLimiter,
 ): ResultAsync<void, LobsterError> {
-  return fcApi(socketPath, 'PUT', `/network-interfaces/${ifaceId}`, {
+  const body: Record<string, unknown> = {
     iface_id: ifaceId,
     host_dev_name: hostDevName,
-  }).map(() => undefined);
+  };
+  if (rxRateLimiter) {
+    body.rx_rate_limiter = toFcRateLimiter(rxRateLimiter);
+  }
+  if (txRateLimiter) {
+    body.tx_rate_limiter = toFcRateLimiter(txRateLimiter);
+  }
+  return fcApi(socketPath, 'PUT', `/network-interfaces/${ifaceId}`, body).map(() => undefined);
 }
 
 export function startInstance(socketPath: string): ResultAsync<void, LobsterError> {

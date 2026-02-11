@@ -45,7 +45,7 @@ export function runList(
         if (entry.vmPid === 'dead') return Promise.resolve();
         const tenant = registry.tenants[i];
         return vsock
-          .getStats(tenant.ipAddress, config.vsock.agentPort)
+          .getStats(tenant.ipAddress, config.vsock.agentPort, tenant.agentToken)
           .map((stats) => {
             entry.memoryMb = stats.memoryKb > 0 ? Math.round(stats.memoryKb / 1024) : undefined;
           })

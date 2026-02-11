@@ -5,7 +5,7 @@ import { loadRegistry, loadConfig } from '../config/loader.js';
 import { LogStream } from '../ui/LogStream.js';
 import * as vsock from '../system/vsock.js';
 
-function fetchLogs(guestIp: string, port: number): Promise<string> {
+function fetchLogs(guestIp: string, port: number, agentToken: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const { Socket } = require('net');
     const socket = new Socket();
@@ -16,7 +16,7 @@ function fetchLogs(guestIp: string, port: number): Promise<string> {
     }, 5000);
 
     socket.connect(port, guestIp, () => {
-      socket.write(JSON.stringify({ type: 'get-logs' }) + '\n');
+      socket.write(JSON.stringify({ type: 'get-logs', token: agentToken }) + '\n');
     });
     socket.on('data', (chunk: Buffer) => { response += chunk.toString(); });
     socket.on('end', () => {
@@ -45,7 +45,7 @@ function LogsApp({ tenant, agentPort }: { tenant: Tenant; agentPort: number }) {
     async function pollLogs() {
       while (!cancelled) {
         try {
-          const logs = await fetchLogs(tenant.ipAddress, agentPort);
+          const logs = await fetchLogs(tenant.ipAddress, agentPort, tenant.agentToken);
           if (logs) {
             const parts = logs.split('\n').filter(Boolean);
             setLines(parts);
@@ -95,7 +95,7 @@ export async function runLogs(
   if (!process.stdin.isTTY) {
     // Non-TTY: single fetch and print
     try {
-      const logs = await fetchLogs(tenant.ipAddress, config.vsock.agentPort);
+      const logs = await fetchLogs(tenant.ipAddress, config.vsock.agentPort, tenant.agentToken);
       if (logs) process.stdout.write(logs + '\n');
     } catch (e) {
       console.error(`Failed to fetch logs: ${e instanceof Error ? e.message : e}`);

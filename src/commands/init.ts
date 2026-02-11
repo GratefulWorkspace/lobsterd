@@ -6,7 +6,7 @@ import * as network from '../system/network.js';
 import * as caddy from '../system/caddy.js';
 import {
   CONFIG_DIR, CONFIG_PATH, REGISTRY_PATH, DEFAULT_CONFIG, EMPTY_REGISTRY,
-  LOBSTERD_BASE, OVERLAYS_DIR, SOCKETS_DIR, KERNELS_DIR,
+  LOBSTERD_BASE, OVERLAYS_DIR, SOCKETS_DIR, KERNELS_DIR, JAILER_BASE,
   CERTS_DIR, ORIGIN_CERT_PATH, ORIGIN_KEY_PATH, BUNDLED_CERTS_DIR,
 } from '../config/defaults.js';
 
@@ -53,6 +53,18 @@ function checkFirecracker(config: LobsterdConfig): ResultAsync<void, LobsterErro
   });
 }
 
+function checkJailer(config: LobsterdConfig): ResultAsync<void, LobsterError> {
+  return execUnchecked(['test', '-x', config.jailer.binaryPath]).andThen((r) => {
+    if (r.exitCode !== 0) {
+      return errAsync<void, LobsterError>({
+        code: 'JAILER_NOT_FOUND',
+        message: `Jailer binary not found at ${config.jailer.binaryPath}`,
+      });
+    }
+    return okAsync(undefined);
+  });
+}
+
 function checkKernel(config: LobsterdConfig): ResultAsync<void, LobsterError> {
   return ResultAsync.fromPromise(
     (async () => {
@@ -84,7 +96,7 @@ function checkRootfs(config: LobsterdConfig): ResultAsync<void, LobsterError> {
 }
 
 function ensureDirs(): ResultAsync<void, LobsterError> {
-  return exec(['mkdir', '-p', CONFIG_DIR, CERTS_DIR, LOBSTERD_BASE, OVERLAYS_DIR, SOCKETS_DIR, KERNELS_DIR])
+  return exec(['mkdir', '-p', CONFIG_DIR, CERTS_DIR, LOBSTERD_BASE, OVERLAYS_DIR, SOCKETS_DIR, KERNELS_DIR, JAILER_BASE])
     .andThen(() => {
       // 711: root rw, others can only traverse (needed for Caddy to reach certs/)
       chmodSync(CONFIG_DIR, 0o711);
@@ -142,6 +154,7 @@ function writeEmptyRegistry(): ResultAsync<void, LobsterError> {
 export interface InitResult {
   kvmAvailable: boolean;
   firecrackerFound: boolean;
+  jailerFound: boolean;
   kernelFound: boolean;
   rootfsFound: boolean;
   dirsCreated: boolean;
@@ -156,6 +169,7 @@ export function runInit(initialConfig: LobsterdConfig = DEFAULT_CONFIG): ResultA
   const result: InitResult = {
     kvmAvailable: false,
     firecrackerFound: false,
+    jailerFound: false,
     kernelFound: false,
     rootfsFound: false,
     dirsCreated: false,
@@ -170,12 +184,16 @@ export function runInit(initialConfig: LobsterdConfig = DEFAULT_CONFIG): ResultA
     .andThen(() => checkKvm())
     .andThen(() => {
       result.kvmAvailable = true;
-      // Load vhost_vsock module (best-effort, not required for TCP-based agent)
+      // Load vhost_vsock module (best-effort)
       return execUnchecked(['modprobe', 'vhost_vsock']).orElse(() => okAsync({ exitCode: 0, stdout: '', stderr: '' }));
     })
     .andThen(() => checkFirecracker(config))
     .andThen(() => {
       result.firecrackerFound = true;
+      return checkJailer(config);
+    })
+    .andThen(() => {
+      result.jailerFound = true;
       return checkKernel(config);
     })
     .andThen(() => {
