@@ -180,9 +180,9 @@ program
 
 program
   .command("snap <name>")
-  .description("Snapshot overlay file")
-  .option("--prune", "Prune old snapshots beyond retention")
-  .action(async (name: string, opts: { prune?: boolean }) => {
+  .description("Snapshot overlay as sparse tarball into ./snaps/")
+  .option("--json", "Output result as JSON")
+  .action(async (name: string, opts: { json?: boolean }) => {
     const result = await runSnap(name, opts);
 
     if (result.isErr()) {
@@ -190,7 +190,11 @@ program
       process.exit(1);
     }
 
-    console.log(`Snapshot created: ${result.value}`);
+    if (opts.json) {
+      console.log(JSON.stringify(result.value));
+    } else {
+      console.log(`Snapshot created: ${result.value.path}`);
+    }
   });
 
 // ── watch ─────────────────────────────────────────────────────────────────────
