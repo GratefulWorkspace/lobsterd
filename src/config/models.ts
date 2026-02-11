@@ -9,6 +9,9 @@ export const PROVIDER_DEFAULTS = {
 export interface ProviderInput {
   baseUrl: string;
   model: string;
+  modelName: string;
+  contextWindow: number;
+  maxTokens: number;
   apiKey: string;
 }
 
@@ -28,9 +31,9 @@ export function buildProviderConfig(
           models: [
             {
               id: input.model,
-              name: PROVIDER_DEFAULTS.modelName,
-              contextWindow: PROVIDER_DEFAULTS.contextWindow,
-              maxTokens: PROVIDER_DEFAULTS.maxTokens,
+              name: input.modelName,
+              contextWindow: input.contextWindow,
+              maxTokens: input.maxTokens,
             },
           ],
         },

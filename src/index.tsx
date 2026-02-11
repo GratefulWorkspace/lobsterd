@@ -59,16 +59,29 @@ program
   .option("-k, --api-key <key>", "API key for the model provider")
   .option("--base-url <url>", "OpenAI-compatible base URL")
   .option("--model <id>", "Model identifier at the provider")
+  .option("--model-name <name>", "Human-readable model display name")
+  .option("--context-window <n>", "Max input tokens", Number.parseInt)
+  .option("--max-tokens <n>", "Max output tokens per response", Number.parseInt)
   .action(
     async (
       name: string,
-      opts: { apiKey?: string; baseUrl?: string; model?: string },
+      opts: {
+        apiKey?: string;
+        baseUrl?: string;
+        model?: string;
+        modelName?: string;
+        contextWindow?: number;
+        maxTokens?: number;
+      },
     ) => {
       // Non-interactive mode: --api-key provided
       if (opts.apiKey) {
         const override = buildProviderConfig({
           baseUrl: opts.baseUrl ?? PROVIDER_DEFAULTS.baseUrl,
           model: opts.model ?? PROVIDER_DEFAULTS.model,
+          modelName: opts.modelName ?? PROVIDER_DEFAULTS.modelName,
+          contextWindow: opts.contextWindow ?? PROVIDER_DEFAULTS.contextWindow,
+          maxTokens: opts.maxTokens ?? PROVIDER_DEFAULTS.maxTokens,
           apiKey: opts.apiKey,
         });
         console.log(`Spawning tenant "${name}"...`);

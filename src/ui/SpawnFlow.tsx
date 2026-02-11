@@ -6,7 +6,15 @@ import { PROVIDER_DEFAULTS, buildProviderConfig } from "../config/models.js";
 import type { Tenant } from "../types/index.js";
 import { LOBSTER } from "./theme.js";
 
-type Step = "enter-base-url" | "enter-model" | "enter-api-key" | "spawning" | "done";
+type Step =
+  | "enter-base-url"
+  | "enter-model"
+  | "enter-model-name"
+  | "enter-context-window"
+  | "enter-max-tokens"
+  | "enter-api-key"
+  | "spawning"
+  | "done";
 
 interface Props {
   name: string;
@@ -16,8 +24,11 @@ export function SpawnFlow({ name }: Props) {
   const { exit } = useApp();
 
   const [step, setStep] = useState<Step>("enter-base-url");
-  const [baseUrl, setBaseUrl] = useState<string>(PROVIDER_DEFAULTS.baseUrl);
-  const [model, setModel] = useState<string>(PROVIDER_DEFAULTS.model);
+  const [baseUrl, setBaseUrl] = useState(PROVIDER_DEFAULTS.baseUrl);
+  const [model, setModel] = useState(PROVIDER_DEFAULTS.model);
+  const [modelName, setModelName] = useState(PROVIDER_DEFAULTS.modelName);
+  const [contextWindow, setContextWindow] = useState(PROVIDER_DEFAULTS.contextWindow);
+  const [maxTokens, setMaxTokens] = useState(PROVIDER_DEFAULTS.maxTokens);
   const [progress, setProgress] = useState<SpawnProgress | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +40,23 @@ export function SpawnFlow({ name }: Props) {
 
   function handleModelSubmit(value: string) {
     setModel(value || PROVIDER_DEFAULTS.model);
+    setStep("enter-model-name");
+  }
+
+  function handleModelNameSubmit(value: string) {
+    setModelName(value || PROVIDER_DEFAULTS.modelName);
+    setStep("enter-context-window");
+  }
+
+  function handleContextWindowSubmit(value: string) {
+    const parsed = Number.parseInt(value, 10);
+    setContextWindow(parsed > 0 ? parsed : PROVIDER_DEFAULTS.contextWindow);
+    setStep("enter-max-tokens");
+  }
+
+  function handleMaxTokensSubmit(value: string) {
+    const parsed = Number.parseInt(value, 10);
+    setMaxTokens(parsed > 0 ? parsed : PROVIDER_DEFAULTS.maxTokens);
     setStep("enter-api-key");
   }
 
@@ -38,6 +66,9 @@ export function SpawnFlow({ name }: Props) {
     const override = buildProviderConfig({
       baseUrl,
       model,
+      modelName,
+      contextWindow,
+      maxTokens,
       apiKey: apiKey.trim(),
     });
     setStep("spawning");
@@ -88,7 +119,46 @@ export function SpawnFlow({ name }: Props) {
               onSubmit={handleModelSubmit}
             />
           </Box>
-          <Text dimColor>Model identifier at the provider (press Enter for default)</Text>
+          <Text dimColor>Model identifier at the provider</Text>
+        </Box>
+      )}
+
+      {step === "enter-model-name" && (
+        <Box flexDirection="column" marginTop={1}>
+          <Box gap={1}>
+            <Text>Model name:</Text>
+            <TextInput
+              defaultValue={PROVIDER_DEFAULTS.modelName}
+              onSubmit={handleModelNameSubmit}
+            />
+          </Box>
+          <Text dimColor>Human-readable display name</Text>
+        </Box>
+      )}
+
+      {step === "enter-context-window" && (
+        <Box flexDirection="column" marginTop={1}>
+          <Box gap={1}>
+            <Text>Context window:</Text>
+            <TextInput
+              defaultValue={String(PROVIDER_DEFAULTS.contextWindow)}
+              onSubmit={handleContextWindowSubmit}
+            />
+          </Box>
+          <Text dimColor>Max input tokens</Text>
+        </Box>
+      )}
+
+      {step === "enter-max-tokens" && (
+        <Box flexDirection="column" marginTop={1}>
+          <Box gap={1}>
+            <Text>Max output tokens:</Text>
+            <TextInput
+              defaultValue={String(PROVIDER_DEFAULTS.maxTokens)}
+              onSubmit={handleMaxTokensSubmit}
+            />
+          </Box>
+          <Text dimColor>Max tokens per response</Text>
         </Box>
       )}
 
