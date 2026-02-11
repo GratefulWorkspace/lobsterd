@@ -217,7 +217,7 @@ export function runSpawn(
     .andThen(() => {
       // Step 8: Add Caddy route
       progress('caddy', `Adding Caddy route for ${name}.${config.caddy.domain}`);
-      return caddy.addRoute(config.caddy.adminApi, name, config.caddy.domain, tenant.gatewayPort);
+      return caddy.addRoute(config.caddy.adminApi, name, config.caddy.domain, tenant.ipAddress, 9000);
     })
     .andThen(() => {
       undoStack.push(() => caddy.removeRoute(config.caddy.adminApi, name));

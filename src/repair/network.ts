@@ -20,7 +20,7 @@ export function repairTap(tenant: Tenant): ResultAsync<RepairResult, LobsterErro
 }
 
 export function repairCaddyRoute(tenant: Tenant, config: LobsterdConfig): ResultAsync<RepairResult, LobsterError> {
-  return caddy.addRoute(config.caddy.adminApi, tenant.name, config.caddy.domain, tenant.gatewayPort)
+  return caddy.addRoute(config.caddy.adminApi, tenant.name, config.caddy.domain, tenant.ipAddress, 9000)
     .map((): RepairResult => ({
       repair: 'net.caddy-route',
       fixed: true,

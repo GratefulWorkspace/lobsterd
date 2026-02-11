@@ -34,7 +34,8 @@ export function addRoute(
   adminApi: string,
   tenantName: string,
   domain: string,
-  upstreamPort: number,
+  guestIp: string,
+  guestPort: number,
 ): ResultAsync<void, LobsterError> {
   const route = {
     '@id': `lobster-${tenantName}`,
@@ -42,7 +43,7 @@ export function addRoute(
     handle: [
       {
         handler: 'reverse_proxy',
-        upstreams: [{ dial: `localhost:${upstreamPort}` }],
+        upstreams: [{ dial: `${guestIp}:${guestPort}` }],
       },
     ],
   };
