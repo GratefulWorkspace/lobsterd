@@ -5,8 +5,10 @@ set -euo pipefail
 # Produces rootfs.ext4 with: Node.js, OpenClaw, and lobster-agent
 # Runs on any Linux host (Ubuntu, etc.) — no apk required on host.
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 ROOTFS_SIZE_MB=2048
-ROOTFS_FILE="rootfs.ext4"
+ROOTFS_FILE="$SCRIPT_DIR/rootfs.ext4"
 MOUNT_DIR="$(mktemp -d)"
 ALPINE_VERSION="3.20"
 ALPINE_ARCH="x86_64"
@@ -73,11 +75,11 @@ INITTAB
 sed -i 's/^root:.*/root::0:0:root:\/root:\/bin\/sh/' "$MOUNT_DIR/etc/passwd"
 
 echo "==> Installing overlay-init"
-install -m 0755 overlay-init "$MOUNT_DIR/sbin/overlay-init"
+install -m 0755 "$SCRIPT_DIR/overlay-init" "$MOUNT_DIR/sbin/overlay-init"
 
 echo "==> Installing lobster-agent"
 mkdir -p "$MOUNT_DIR/opt/lobster-agent"
-install -m 0644 lobster-agent.mjs "$MOUNT_DIR/opt/lobster-agent/agent.mjs"
+install -m 0644 "$SCRIPT_DIR/lobster-agent.mjs" "$MOUNT_DIR/opt/lobster-agent/agent.mjs"
 
 # Create agent service
 cat > "$MOUNT_DIR/etc/init.d/lobster-agent" <<'SVC'
