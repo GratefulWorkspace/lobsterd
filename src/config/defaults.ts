@@ -8,6 +8,12 @@ export const LOBSTERD_BASE = '/var/lib/lobsterd';
 export const OVERLAYS_DIR = `${LOBSTERD_BASE}/overlays`;
 export const SOCKETS_DIR = `${LOBSTERD_BASE}/sockets`;
 export const KERNELS_DIR = `${LOBSTERD_BASE}/kernels`;
+export const CERTS_DIR = `${CONFIG_DIR}/certs`;
+export const ORIGIN_CERT_PATH = `${CERTS_DIR}/origin.pem`;
+export const ORIGIN_KEY_PATH = `${CERTS_DIR}/origin-key.pem`;
+
+// Bundled cert sources (relative to project root)
+export const BUNDLED_CERTS_DIR = new URL('../../certs', import.meta.url).pathname;
 
 export const DEFAULT_CONFIG: LobsterdConfig = {
   firecracker: {

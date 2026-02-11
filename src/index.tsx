@@ -42,6 +42,7 @@ program
     console.log(`  Firecracker: ${r.firecrackerFound ? 'found' : 'not found'}`);
     console.log(`  Kernel: ${r.kernelFound ? 'found' : 'not found'}`);
     console.log(`  Rootfs: ${r.rootfsFound ? 'found' : 'not found'}`);
+    console.log(`  Origin certs: ${r.certsInstalled ? 'installed' : 'not bundled (using ACME)'}`);
     console.log(`  IP forwarding: ${r.ipForwardingEnabled ? 'enabled' : 'failed'}`);
     console.log(`  Caddy: ${r.caddyConfigured ? 'configured' : 'failed'}`);
     console.log('\nHost initialized successfully.');

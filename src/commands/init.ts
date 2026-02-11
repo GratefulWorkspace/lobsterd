@@ -7,6 +7,7 @@ import * as caddy from '../system/caddy.js';
 import {
   CONFIG_DIR, CONFIG_PATH, REGISTRY_PATH, DEFAULT_CONFIG, EMPTY_REGISTRY,
   LOBSTERD_BASE, OVERLAYS_DIR, SOCKETS_DIR, KERNELS_DIR,
+  CERTS_DIR, ORIGIN_CERT_PATH, ORIGIN_KEY_PATH, BUNDLED_CERTS_DIR,
 } from '../config/defaults.js';
 
 function checkLinux(): ResultAsync<void, LobsterError> {
@@ -83,11 +84,29 @@ function checkRootfs(config: LobsterdConfig): ResultAsync<void, LobsterError> {
 }
 
 function ensureDirs(): ResultAsync<void, LobsterError> {
-  return exec(['mkdir', '-p', CONFIG_DIR, LOBSTERD_BASE, OVERLAYS_DIR, SOCKETS_DIR, KERNELS_DIR])
+  return exec(['mkdir', '-p', CONFIG_DIR, CERTS_DIR, LOBSTERD_BASE, OVERLAYS_DIR, SOCKETS_DIR, KERNELS_DIR])
     .andThen(() => {
       chmodSync(CONFIG_DIR, 0o700);
       return okAsync(undefined);
     });
+}
+
+function installOriginCerts(): ResultAsync<boolean, LobsterError> {
+  return ResultAsync.fromPromise(
+    (async () => {
+      const bundledCert = Bun.file(`${BUNDLED_CERTS_DIR}/origin.pem`);
+      const bundledKey = Bun.file(`${BUNDLED_CERTS_DIR}/origin-key.pem`);
+      if (!(await bundledCert.exists()) || !(await bundledKey.exists())) return false;
+      // Skip empty placeholder files
+      if (bundledCert.size === 0 || bundledKey.size === 0) return false;
+      await Bun.write(ORIGIN_CERT_PATH, bundledCert);
+      await Bun.write(ORIGIN_KEY_PATH, bundledKey);
+      chmodSync(ORIGIN_CERT_PATH, 0o644);
+      chmodSync(ORIGIN_KEY_PATH, 0o600);
+      return true;
+    })(),
+    (e) => ({ code: 'EXEC_FAILED' as const, message: 'Failed to install origin certs', cause: e }),
+  );
 }
 
 async function fileExists(path: string): Promise<boolean> {
@@ -125,11 +144,13 @@ export interface InitResult {
   rootfsFound: boolean;
   dirsCreated: boolean;
   configCreated: boolean;
+  certsInstalled: boolean;
   ipForwardingEnabled: boolean;
   caddyConfigured: boolean;
 }
 
-export function runInit(config: LobsterdConfig = DEFAULT_CONFIG): ResultAsync<InitResult, LobsterError> {
+export function runInit(initialConfig: LobsterdConfig = DEFAULT_CONFIG): ResultAsync<InitResult, LobsterError> {
+  let config = initialConfig;
   const result: InitResult = {
     kvmAvailable: false,
     firecrackerFound: false,
@@ -137,6 +158,7 @@ export function runInit(config: LobsterdConfig = DEFAULT_CONFIG): ResultAsync<In
     rootfsFound: false,
     dirsCreated: false,
     configCreated: false,
+    certsInstalled: false,
     ipForwardingEnabled: false,
     caddyConfigured: false,
   };
@@ -169,6 +191,14 @@ export function runInit(config: LobsterdConfig = DEFAULT_CONFIG): ResultAsync<In
     .andThen(() => writeEmptyRegistry())
     .andThen(() => {
       result.configCreated = true;
+      return installOriginCerts();
+    })
+    .andThen((installed) => {
+      result.certsInstalled = installed;
+      // If certs were installed and no TLS config was explicitly set, use them
+      if (installed && !config.caddy.tls) {
+        config = { ...config, caddy: { ...config.caddy, tls: { certPath: ORIGIN_CERT_PATH, keyPath: ORIGIN_KEY_PATH } } };
+      }
       return network.enableIpForwarding();
     })
     .andThen(() => {
