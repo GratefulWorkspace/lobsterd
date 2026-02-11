@@ -2,7 +2,7 @@
 import { Command } from "commander";
 import { render } from "ink";
 import { runEvict } from "./commands/evict.js";
-import { runInit } from "./commands/init.js";
+import { preflight } from "./commands/init.js";
 import { formatTable, runList } from "./commands/list.js";
 import { runLogs } from "./commands/logs.js";
 import { runMolt } from "./commands/molt.js";
@@ -10,7 +10,9 @@ import { runSnap } from "./commands/snap.js";
 import { runSpawn } from "./commands/spawn.js";
 import { runTank } from "./commands/tank.js";
 import { runWatch } from "./commands/watch.js";
+import { DEFAULT_CONFIG } from "./config/defaults.js";
 import { loadConfig } from "./config/loader.js";
+import { InitFlow } from "./ui/InitFlow.js";
 import { MoltResults } from "./ui/MoltProgress.js";
 
 const program = new Command();
@@ -24,52 +26,28 @@ program
 
 program
   .command("init")
-  .description(
-    "Initialize host (install deps, check KVM, configure Caddy)",
-  )
+  .description("Initialize host (install deps, check KVM, configure Caddy)")
   .action(async () => {
-    const { createInterface } = await import("node:readline");
-    const rl = createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
-    const domainInput = await new Promise<string>((resolve) => {
-      rl.question("Domain for tenant routes [lobster.local]: ", (answer) => {
-        rl.close();
-        resolve(answer.trim());
-      });
-    });
-    const domain = domainInput || undefined;
-
-    console.log("Initializing lobsterd host...");
     const configResult = await loadConfig();
-    const config = configResult.isOk() ? configResult.value : undefined;
-    const result = await runInit(config, domain);
+    const config = configResult.isOk() ? configResult.value : DEFAULT_CONFIG;
 
-    if (result.isErr()) {
-      console.error(`\n✗ ${result.error.message}`);
+    const pre = await preflight(config);
+    if (pre.isErr()) {
+      console.error(`\n${pre.error.message}`);
       process.exit(1);
     }
 
-    const r = result.value;
-    console.log(`  KVM: ${r.kvmAvailable ? "available" : "not found"}`);
-    console.log(`  Firecracker: ${r.firecrackerFound ? "found" : "not found"}`);
-    console.log(`  Kernel: ${r.kernelFound ? "found" : "not found"}`);
-    console.log(`  Rootfs: ${r.rootfsFound ? "found" : "not found"}`);
-    console.log(
-      `  Origin certs: ${r.certsInstalled ? "installed" : "not bundled (using ACME)"}`,
-    );
-    console.log(
-      `  IP forwarding: ${r.ipForwardingEnabled ? "enabled" : "failed"}`,
-    );
-    console.log(`  Caddy: ${r.caddyConfigured ? "configured" : "failed"}`);
-    if (r.warnings.length > 0) {
-      console.log("\nSecurity warnings:");
-      for (const w of r.warnings) {
-        console.log(`  ⚠ ${w}`);
-      }
+    if (pre.value.missing.caddy && !pre.value.caddyPackageManager) {
+      console.error(
+        "\nCaddy not found and no supported package manager detected (apt-get, dnf, yum, pacman)",
+      );
+      process.exit(1);
     }
-    console.log("\nHost initialized successfully.");
+
+    const { waitUntilExit } = render(
+      <InitFlow preflight={pre.value} config={config} />,
+    );
+    await waitUntilExit();
   });
 
 // ── spawn ─────────────────────────────────────────────────────────────────────
