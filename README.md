@@ -20,10 +20,6 @@ curl -fsSL https://bun.sh/install | bash
 # Caddy (reverse proxy)
 apt-get install -y caddy
 
-# Node.js + npm (needed on the host to build the guest rootfs)
-curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-apt-get install -y nodejs
-
 # Firecracker v1.14.1
 ARCH="$(uname -m)"
 curl -fSL "https://github.com/firecracker-microvm/firecracker/releases/download/v1.14.1/firecracker-v1.14.1-${ARCH}.tgz" \
@@ -36,7 +32,7 @@ install -m 0755 "/tmp/release-v1.14.1-${ARCH}/firecracker-v1.14.1-${ARCH}" /usr/
 
 Firecracker needs a bare vmlinux kernel image. **Use kernel 6.1 from the
 Firecracker CI artifacts** -- the old quickstart 4.14 kernel is too old for
-modern Node.js and will cause the guest agent to silently fail.
+Bun/Node.js and will cause the guest agent to silently fail.
 
 ```bash
 mkdir -p /var/lib/lobsterd/kernels
@@ -54,8 +50,8 @@ https://s3.amazonaws.com/spec.ccfc.min/firecracker-ci/v{FC_MINOR}/x86_64/vmlinux
 ## Guest rootfs
 
 Build the Alpine-based root filesystem image. This downloads Alpine 3.20,
-installs Node.js 22 (musl build from unofficial-builds.nodejs.org), OpenClaw,
-and the lobster-agent, then produces a 2GB ext4 image.
+installs Bun (musl build), OpenClaw (with llama.cpp stripped for size), and the
+lobster-agent, then produces an ext4 image.
 
 ```bash
 cd guest
@@ -111,7 +107,7 @@ sudo bun src/index.tsx snap <name>
 ## Architecture
 
 Each tenant gets:
-- A Firecracker microVM (2 vCPU, 512MB RAM by default)
+- A Firecracker microVM (2 vCPU, 1024MB RAM by default)
 - A /30 subnet with a dedicated TAP device and iptables NAT
 - An overlay ext4 filesystem layered on top of the shared read-only rootfs
 - A lobster-agent (TCP on port 52/53) for host-to-guest communication
