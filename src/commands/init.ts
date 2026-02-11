@@ -86,7 +86,9 @@ function checkRootfs(config: LobsterdConfig): ResultAsync<void, LobsterError> {
 function ensureDirs(): ResultAsync<void, LobsterError> {
   return exec(['mkdir', '-p', CONFIG_DIR, CERTS_DIR, LOBSTERD_BASE, OVERLAYS_DIR, SOCKETS_DIR, KERNELS_DIR])
     .andThen(() => {
-      chmodSync(CONFIG_DIR, 0o700);
+      // 711: root rw, others can only traverse (needed for Caddy to reach certs/)
+      chmodSync(CONFIG_DIR, 0o711);
+      chmodSync(CERTS_DIR, 0o755);
       return okAsync(undefined);
     });
 }
@@ -102,7 +104,7 @@ function installOriginCerts(): ResultAsync<boolean, LobsterError> {
       await Bun.write(ORIGIN_CERT_PATH, bundledCert);
       await Bun.write(ORIGIN_KEY_PATH, bundledKey);
       chmodSync(ORIGIN_CERT_PATH, 0o644);
-      chmodSync(ORIGIN_KEY_PATH, 0o600);
+      chmodSync(ORIGIN_KEY_PATH, 0o644);
       return true;
     })(),
     (e) => ({ code: 'EXEC_FAILED' as const, message: 'Failed to install origin certs', cause: e }),
