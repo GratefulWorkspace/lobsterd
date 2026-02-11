@@ -9,21 +9,6 @@ import type {
   Tenant,
 } from "../types/index.js";
 
-function buildTenantConfig(
-  tenant: Tenant,
-  config: LobsterdConfig,
-): Record<string, unknown> {
-  const tenantOrigin = `https://${tenant.name}.${config.caddy.domain}`;
-  const tenantConfig = structuredClone(config.openclaw.defaultConfig);
-  const origins = tenantConfig.gateway?.controlUi?.allowedOrigins ?? [];
-  if (!origins.includes(tenantOrigin)) {
-    origins.push(tenantOrigin);
-  }
-  if (tenantConfig.gateway?.controlUi) {
-    tenantConfig.gateway.controlUi.allowedOrigins = origins;
-  }
-  return tenantConfig;
-}
 
 export function repairVmProcess(
   tenant: Tenant,
@@ -144,7 +129,6 @@ export function repairVmProcess(
         config.vsock.agentPort,
         {
           OPENCLAW_GATEWAY_TOKEN: tenant.gatewayToken,
-          OPENCLAW_CONFIG: JSON.stringify(buildTenantConfig(tenant, config)),
         },
         tenant.agentToken,
       );
@@ -175,7 +159,6 @@ export function repairVmResponsive(
       config.vsock.agentPort,
       {
         OPENCLAW_GATEWAY_TOKEN: tenant.gatewayToken,
-        OPENCLAW_CONFIG: JSON.stringify(buildTenantConfig(tenant, config)),
       },
       tenant.agentToken,
     )
@@ -183,7 +166,7 @@ export function repairVmResponsive(
       (): RepairResult => ({
         repair: "vm.responsive",
         fixed: true,
-        actions: ["Re-injected secrets via TCP"],
+        actions: ["Re-injected gateway token via TCP"],
       }),
     )
     .orElse(() =>
