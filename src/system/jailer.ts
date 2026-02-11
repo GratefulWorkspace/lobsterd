@@ -53,7 +53,7 @@ export function buildJailerArgs(
     '--exec-file', firecrackerBinaryPath,
     '--uid', String(uid),
     '--gid', String(uid),
-    '--chroot-base-path', jailerConfig.chrootBaseDir,
+    '--chroot-base-dir', jailerConfig.chrootBaseDir,
     '--',
     '--api-sock', 'api.socket',
   ];

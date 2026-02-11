@@ -86,7 +86,7 @@ export function addVsock(
 ): ResultAsync<void, LobsterError> {
   return fcApi(socketPath, 'PUT', '/vsock', {
     guest_cid: guestCid,
-    uds_path: `${socketPath}.vsock`,
+    uds_path: 'vsock.socket',
   }).map(() => undefined);
 }
 
