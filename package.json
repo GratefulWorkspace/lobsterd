@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "type": "module",
   "bin": {
-    "lobster": "./src/index.tsx"
+    "lobsterd": "./src/index.tsx"
   },
   "dependencies": {
     "ink": "^5.2.0",
@@ -13,7 +13,16 @@
     "neverthrow": "^8.2.0",
     "zod": "^3.24.2"
   },
+  "scripts": {
+    "format": "biome check --write .",
+    "lint": "biome lint .",
+    "check": "biome check --write .",
+    "ci": "biome format . && bun run lint && bun run typecheck",
+    "typecheck": "tsc --noEmit",
+    "postinstall": "bun link"
+  },
   "devDependencies": {
+    "@biomejs/biome": "^2.3.5",
     "@types/react": "^18.3.18",
     "typescript": "^5.7.3",
     "@types/bun": "^1.2.2"

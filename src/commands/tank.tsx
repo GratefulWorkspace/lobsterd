@@ -1,16 +1,27 @@
-import React, { useState, useEffect } from 'react';
-import { render, Box, Text } from 'ink';
-import type { Tenant, TenantWatchState, HealthCheckResult, LobsterdConfig } from '../types/index.js';
-import { loadConfig, loadRegistry } from '../config/loader.js';
-import { runAllChecks } from '../checks/index.js';
-import { initialWatchState } from '../watchdog/state.js';
-import { transition } from '../watchdog/state.js';
-import { Dashboard } from '../ui/Dashboard.js';
+import { Box, render, Text } from "ink";
+import { useEffect, useState } from "react";
+import { runAllChecks } from "../checks/index.js";
+import { loadConfig, loadRegistry } from "../config/loader.js";
+import type {
+  LobsterdConfig,
+  Tenant,
+  TenantWatchState,
+} from "../types/index.js";
+import { Dashboard } from "../ui/Dashboard.js";
+import { initialWatchState, transition } from "../watchdog/state.js";
 
-function TankApp({ tenants, config }: { tenants: Tenant[]; config: LobsterdConfig }) {
+function TankApp({
+  tenants,
+  config,
+}: {
+  tenants: Tenant[];
+  config: LobsterdConfig;
+}) {
   const [states, setStates] = useState<Record<string, TenantWatchState>>(() => {
     const s: Record<string, TenantWatchState> = {};
-    for (const t of tenants) s[t.name] = initialWatchState();
+    for (const t of tenants) {
+      s[t.name] = initialWatchState();
+    }
     return s;
   });
   const [lastTick, setLastTick] = useState<string | null>(null);
@@ -21,7 +32,9 @@ function TankApp({ tenants, config }: { tenants: Tenant[]; config: LobsterdConfi
 
     async function check() {
       for (const tenant of tenants) {
-        if (cancelled) break;
+        if (cancelled) {
+          break;
+        }
         const result = await runAllChecks(tenant, config);
         if (result.isOk() && !cancelled) {
           setStates((prev) => {
@@ -38,8 +51,10 @@ function TankApp({ tenants, config }: { tenants: Tenant[]; config: LobsterdConfi
     }
 
     check();
-    return () => { cancelled = true; };
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [config, tenants]);
 
   if (checking) {
     return (
@@ -68,7 +83,9 @@ export async function runTank(): Promise<number> {
   const registry = registryResult.value;
 
   if (registry.tenants.length === 0) {
-    console.log('No tenants registered. Use `lobster spawn <name>` to add one.');
+    console.log(
+      "No tenants registered. Use `lobster spawn <name>` to add one.",
+    );
     return 0;
   }
 

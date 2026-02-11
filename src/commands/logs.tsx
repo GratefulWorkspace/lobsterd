@@ -1,30 +1,37 @@
-import React, { useState, useEffect } from 'react';
-import { render, useApp, useInput } from 'ink';
-import type { Tenant } from '../types/index.js';
-import { loadRegistry, loadConfig } from '../config/loader.js';
-import { LogStream } from '../ui/LogStream.js';
-import * as vsock from '../system/vsock.js';
+import { render, useApp, useInput } from "ink";
+import { useEffect, useState } from "react";
+import { loadConfig, loadRegistry } from "../config/loader.js";
+import type { Tenant } from "../types/index.js";
+import { LogStream } from "../ui/LogStream.js";
 
-function fetchLogs(guestIp: string, port: number, agentToken: string): Promise<string> {
+function fetchLogs(
+  guestIp: string,
+  port: number,
+  agentToken: string,
+): Promise<string> {
   return new Promise((resolve, reject) => {
-    const { Socket } = require('net');
+    const { Socket } = require("node:net");
     const socket = new Socket();
-    let response = '';
+    let response = "";
     const timer = setTimeout(() => {
       socket.destroy();
-      reject(new Error('timeout'));
+      reject(new Error("timeout"));
     }, 5000);
 
     socket.connect(port, guestIp, () => {
-      socket.write(JSON.stringify({ type: 'get-logs', token: agentToken }) + '\n');
+      socket.write(
+        `${JSON.stringify({ type: "get-logs", token: agentToken })}\n`,
+      );
     });
-    socket.on('data', (chunk: Buffer) => { response += chunk.toString(); });
-    socket.on('end', () => {
+    socket.on("data", (chunk: Buffer) => {
+      response += chunk.toString();
+    });
+    socket.on("end", () => {
       clearTimeout(timer);
       socket.end();
       resolve(response.trim());
     });
-    socket.on('error', (err: Error) => {
+    socket.on("error", (err: Error) => {
       clearTimeout(timer);
       reject(err);
     });
@@ -36,7 +43,9 @@ function LogsApp({ tenant, agentPort }: { tenant: Tenant; agentPort: number }) {
   const { exit } = useApp();
 
   useInput((input) => {
-    if (input === 'q') exit();
+    if (input === "q") {
+      exit();
+    }
   });
 
   useEffect(() => {
@@ -45,9 +54,13 @@ function LogsApp({ tenant, agentPort }: { tenant: Tenant; agentPort: number }) {
     async function pollLogs() {
       while (!cancelled) {
         try {
-          const logs = await fetchLogs(tenant.ipAddress, agentPort, tenant.agentToken);
+          const logs = await fetchLogs(
+            tenant.ipAddress,
+            agentPort,
+            tenant.agentToken,
+          );
           if (logs) {
-            const parts = logs.split('\n').filter(Boolean);
+            const parts = logs.split("\n").filter(Boolean);
             setLines(parts);
           }
         } catch {
@@ -58,20 +71,17 @@ function LogsApp({ tenant, agentPort }: { tenant: Tenant; agentPort: number }) {
     }
 
     pollLogs();
-    return () => { cancelled = true; };
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [agentPort, tenant.agentToken, tenant.ipAddress]);
 
-  return (
-    <LogStream
-      title={`${tenant.name} — logs`}
-      lines={lines}
-    />
-  );
+  return <LogStream title={`${tenant.name} — logs`} lines={lines} />;
 }
 
 export async function runLogs(
   name: string,
-  opts: { service?: string } = {},
+  _opts: { service?: string } = {},
 ): Promise<number> {
   const configResult = await loadConfig();
   if (configResult.isErr()) {
@@ -95,10 +105,18 @@ export async function runLogs(
   if (!process.stdin.isTTY) {
     // Non-TTY: single fetch and print
     try {
-      const logs = await fetchLogs(tenant.ipAddress, config.vsock.agentPort, tenant.agentToken);
-      if (logs) process.stdout.write(logs + '\n');
+      const logs = await fetchLogs(
+        tenant.ipAddress,
+        config.vsock.agentPort,
+        tenant.agentToken,
+      );
+      if (logs) {
+        process.stdout.write(`${logs}\n`);
+      }
     } catch (e) {
-      console.error(`Failed to fetch logs: ${e instanceof Error ? e.message : e}`);
+      console.error(
+        `Failed to fetch logs: ${e instanceof Error ? e.message : e}`,
+      );
       return 1;
     }
     return 0;

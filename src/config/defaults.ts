@@ -1,10 +1,10 @@
-import type { LobsterdConfig, TenantRegistry } from '../types/index.js';
+import type { LobsterdConfig, TenantRegistry } from "../types/index.js";
 
-export const CONFIG_DIR = '/etc/lobsterd';
+export const CONFIG_DIR = "/etc/lobsterd";
 export const CONFIG_PATH = `${CONFIG_DIR}/config.json`;
 export const REGISTRY_PATH = `${CONFIG_DIR}/registry.json`;
 
-export const LOBSTERD_BASE = '/var/lib/lobsterd';
+export const LOBSTERD_BASE = "/var/lib/lobsterd";
 export const OVERLAYS_DIR = `${LOBSTERD_BASE}/overlays`;
 export const SOCKETS_DIR = `${LOBSTERD_BASE}/sockets`;
 export const KERNELS_DIR = `${LOBSTERD_BASE}/kernels`;
@@ -14,27 +14,28 @@ export const ORIGIN_CERT_PATH = `${CERTS_DIR}/origin.pem`;
 export const ORIGIN_KEY_PATH = `${CERTS_DIR}/origin-key.pem`;
 
 // Bundled cert sources (relative to project root)
-export const BUNDLED_CERTS_DIR = new URL('../../certs', import.meta.url).pathname;
+export const BUNDLED_CERTS_DIR = new URL("../../certs", import.meta.url)
+  .pathname;
 
 export const DEFAULT_CONFIG: LobsterdConfig = {
   jailer: {
-    binaryPath: '/usr/local/bin/jailer',
+    binaryPath: "/usr/local/bin/jailer",
     chrootBaseDir: JAILER_BASE,
     uidStart: 10000,
   },
   firecracker: {
-    binaryPath: '/usr/local/bin/firecracker',
+    binaryPath: "/usr/local/bin/firecracker",
     kernelPath: `${KERNELS_DIR}/vmlinux`,
     rootfsPath: `${LOBSTERD_BASE}/rootfs.ext4`,
     defaultVcpuCount: 2,
     defaultMemSizeMb: 1024,
     networkRxRateLimit: {
-      bandwidth: { size: 12_500_000, refillTime: 1000 },
-      ops: { size: 10_000, refillTime: 1000 },
+      bandwidth: { size: 1_250_000, refillTime: 1000 },
+      ops: { size: 1_000, refillTime: 1000 },
     },
     networkTxRateLimit: {
-      bandwidth: { size: 12_500_000, refillTime: 1000 },
-      ops: { size: 10_000, refillTime: 1000 },
+      bandwidth: { size: 1_250_000, refillTime: 1000 },
+      ops: { size: 1_000, refillTime: 1000 },
     },
     diskRateLimit: {
       bandwidth: { size: 52_428_800, refillTime: 1000 },
@@ -42,14 +43,14 @@ export const DEFAULT_CONFIG: LobsterdConfig = {
     },
   },
   network: {
-    bridgeName: 'lobster0',
-    subnetBase: '10.0.0.0',
+    bridgeName: "lobster0",
+    subnetBase: "10.0.0.0",
     subnetMask: 30,
     gatewayPortStart: 9000,
   },
   caddy: {
-    adminApi: 'http://localhost:2019',
-    domain: 'gradeprompt.com',
+    adminApi: "http://localhost:2019",
+    domain: "gradeprompt.com",
   },
   vsock: {
     agentPort: 52,
@@ -67,29 +68,29 @@ export const DEFAULT_CONFIG: LobsterdConfig = {
     repairCooldownMs: 60_000,
   },
   openclaw: {
-    installPath: '/opt/openclaw',
+    installPath: "/opt/openclaw",
     defaultConfig: {
       gateway: {
-        mode: 'local',
-        bind: 'lan',
+        mode: "local",
+        bind: "lan",
         auth: {
-          mode: 'token',
+          mode: "token",
         },
         controlUi: {
-          allowedOrigins: ['http://localhost:5173'],
+          allowedOrigins: ["http://localhost:5173"],
           dangerouslyDisableDeviceAuth: true,
         },
       },
       models: {
         providers: {
           fireworks: {
-            baseUrl: 'https://api.fireworks.ai/inference/v1',
-            apiKey: 'fw_SM5UK6FtmAhA15UYscdTXk',
-            api: 'openai-completions',
+            baseUrl: "https://api.fireworks.ai/inference/v1",
+            apiKey: "fw_SM5UK6FtmAhA15UYscdTXk",
+            api: "openai-completions",
             models: [
               {
-                id: 'accounts/fireworks/models/kimi-k2p5',
-                name: 'Kimi K2.5',
+                id: "accounts/fireworks/models/kimi-k2p5",
+                name: "Kimi K2.5",
                 contextWindow: 131072,
                 maxTokens: 32768,
               },
@@ -100,7 +101,7 @@ export const DEFAULT_CONFIG: LobsterdConfig = {
       agents: {
         defaults: {
           model: {
-            primary: 'fireworks/accounts/fireworks/models/kimi-k2p5',
+            primary: "fireworks/accounts/fireworks/models/kimi-k2p5",
           },
         },
       },

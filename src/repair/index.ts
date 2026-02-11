@@ -1,16 +1,25 @@
-import { ResultAsync, ok, okAsync } from 'neverthrow';
-import type { Tenant, HealthCheckResult, RepairResult, LobsterError, LobsterdConfig } from '../types/index.js';
-import { repairVmProcess, repairVmResponsive } from './vm.js';
-import { repairTap, repairCaddyRoute } from './network.js';
+import { ok, ResultAsync } from "neverthrow";
+import type {
+  HealthCheckResult,
+  LobsterdConfig,
+  LobsterError,
+  RepairResult,
+  Tenant,
+} from "../types/index.js";
+import { repairCaddyRoute, repairTap } from "./network.js";
+import { repairVmProcess, repairVmResponsive } from "./vm.js";
 
-type RepairFn = (tenant: Tenant, config: LobsterdConfig) => ResultAsync<RepairResult, LobsterError>;
+type RepairFn = (
+  tenant: Tenant,
+  config: LobsterdConfig,
+) => ResultAsync<RepairResult, LobsterError>;
 
 const REPAIR_MAP: Record<string, RepairFn[]> = {
-  'vm.process': [repairVmProcess],
-  'vm.responsive': [repairVmResponsive],
-  'net.tap': [repairTap],
-  'net.gateway': [repairVmProcess],
-  'net.caddy-route': [repairCaddyRoute],
+  "vm.process": [repairVmProcess],
+  "vm.responsive": [repairVmResponsive],
+  "net.tap": [repairTap],
+  "net.gateway": [repairVmProcess],
+  "net.caddy-route": [repairCaddyRoute],
 };
 
 export function runRepairs(
@@ -18,7 +27,7 @@ export function runRepairs(
   failedChecks: HealthCheckResult[],
   config: LobsterdConfig,
 ): ResultAsync<RepairResult[], LobsterError> {
-  const seen = new Set<Function>();
+  const seen = new Set<RepairFn>();
   const repairFns: RepairFn[] = [];
 
   for (const check of failedChecks) {
@@ -40,7 +49,16 @@ export function runRepairs(
       acc.andThen((results) =>
         fn(tenant, config)
           .map((result) => [...results, result])
-          .orElse(() => ok([...results, { repair: 'unknown', fixed: false, actions: ['Repair threw an error'] }])),
+          .orElse(() =>
+            ok([
+              ...results,
+              {
+                repair: "unknown",
+                fixed: false,
+                actions: ["Repair threw an error"],
+              },
+            ]),
+          ),
       ),
     ResultAsync.fromSafePromise(Promise.resolve([])),
   );

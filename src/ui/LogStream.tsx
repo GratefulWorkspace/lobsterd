@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from "ink";
 
 interface Props {
   title: string;
@@ -13,12 +12,20 @@ export function LogStream({ title, lines, maxLines = 30 }: Props) {
   return (
     <Box flexDirection="column" padding={1}>
       <Box marginBottom={1}>
-        <Text bold inverse> {title} </Text>
-        <Text dimColor> ({lines.length} lines, showing last {maxLines}) </Text>
+        <Text bold inverse>
+          {" "}
+          {title}{" "}
+        </Text>
+        <Text dimColor>
+          {" "}
+          ({lines.length} lines, showing last {maxLines}){" "}
+        </Text>
       </Box>
       <Box flexDirection="column">
         {visible.map((line, i) => (
-          <Text key={i} wrap="truncate">{line}</Text>
+          <Text key={i} wrap="truncate">
+            {line}
+          </Text>
         ))}
       </Box>
       <Box marginTop={1}>

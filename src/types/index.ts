@@ -1,6 +1,6 @@
 // ── Tenant ──────────────────────────────────────────────────────────────────
 
-export type TenantStatus = 'active' | 'suspended' | 'removing';
+export type TenantStatus = "active" | "suspended" | "removing";
 
 export interface Tenant {
   name: string;
@@ -22,7 +22,7 @@ export interface Tenant {
 
 // ── Health ───────────────────────────────────────────────────────────────────
 
-export type HealthStatus = 'ok' | 'degraded' | 'failed';
+export type HealthStatus = "ok" | "degraded" | "failed";
 
 export interface HealthCheckResult {
   check: string;
@@ -38,7 +38,12 @@ export interface RepairResult {
 
 // ── Watchdog ─────────────────────────────────────────────────────────────────
 
-export type WatchState = 'UNKNOWN' | 'HEALTHY' | 'DEGRADED' | 'FAILED' | 'RECOVERING';
+export type WatchState =
+  | "UNKNOWN"
+  | "HEALTHY"
+  | "DEGRADED"
+  | "FAILED"
+  | "RECOVERING";
 
 export interface TenantWatchState {
   state: WatchState;
@@ -118,9 +123,20 @@ export interface WatchdogConfig {
   repairCooldownMs: number;
 }
 
+export interface OpenclawDefaultConfig {
+  gateway?: {
+    controlUi?: {
+      allowedOrigins?: string[];
+      [key: string]: unknown;
+    };
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
 export interface OpenclawConfig {
   installPath: string;
-  defaultConfig: Record<string, unknown>;
+  defaultConfig: OpenclawDefaultConfig;
 }
 
 export interface LobsterdConfig {
@@ -160,27 +176,27 @@ export interface ExecResult {
 }
 
 export type ErrorCode =
-  | 'EXEC_FAILED'
-  | 'EXEC_TIMEOUT'
-  | 'NOT_ROOT'
-  | 'NOT_LINUX'
-  | 'KVM_NOT_AVAILABLE'
-  | 'FIRECRACKER_NOT_FOUND'
-  | 'JAILER_NOT_FOUND'
-  | 'JAILER_SETUP_FAILED'
-  | 'VM_BOOT_FAILED'
-  | 'VSOCK_CONNECT_FAILED'
-  | 'TAP_CREATE_FAILED'
-  | 'CADDY_API_ERROR'
-  | 'OVERLAY_CREATE_FAILED'
-  | 'CONFIG_NOT_FOUND'
-  | 'CONFIG_INVALID'
-  | 'TENANT_EXISTS'
-  | 'TENANT_NOT_FOUND'
-  | 'PERMISSION_DENIED'
-  | 'VALIDATION_FAILED'
-  | 'LOCK_FAILED'
-  | 'UNKNOWN';
+  | "EXEC_FAILED"
+  | "EXEC_TIMEOUT"
+  | "NOT_ROOT"
+  | "NOT_LINUX"
+  | "KVM_NOT_AVAILABLE"
+  | "FIRECRACKER_NOT_FOUND"
+  | "JAILER_NOT_FOUND"
+  | "JAILER_SETUP_FAILED"
+  | "VM_BOOT_FAILED"
+  | "VSOCK_CONNECT_FAILED"
+  | "TAP_CREATE_FAILED"
+  | "CADDY_API_ERROR"
+  | "OVERLAY_CREATE_FAILED"
+  | "CONFIG_NOT_FOUND"
+  | "CONFIG_INVALID"
+  | "TENANT_EXISTS"
+  | "TENANT_NOT_FOUND"
+  | "PERMISSION_DENIED"
+  | "VALIDATION_FAILED"
+  | "LOCK_FAILED"
+  | "UNKNOWN";
 
 export interface LobsterError {
   code: ErrorCode;
@@ -191,9 +207,12 @@ export interface LobsterError {
 // ── Watchdog Events ──────────────────────────────────────────────────────────
 
 export interface WatchdogEvents {
-  'check-complete': { tenant: string; results: HealthCheckResult[] };
-  'repair-start': { tenant: string; checks: HealthCheckResult[] };
-  'repair-complete': { tenant: string; results: RepairResult[] };
-  'state-change': { tenant: string; from: WatchState; to: WatchState };
-  'tick-complete': { timestamp: string; states: Record<string, TenantWatchState> };
+  "check-complete": { tenant: string; results: HealthCheckResult[] };
+  "repair-start": { tenant: string; checks: HealthCheckResult[] };
+  "repair-complete": { tenant: string; results: RepairResult[] };
+  "state-change": { tenant: string; from: WatchState; to: WatchState };
+  "tick-complete": {
+    timestamp: string;
+    states: Record<string, TenantWatchState>;
+  };
 }

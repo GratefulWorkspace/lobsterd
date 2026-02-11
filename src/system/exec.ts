@@ -1,5 +1,5 @@
-import { ResultAsync, err, ok } from 'neverthrow';
-import type { ExecResult, LobsterError } from '../types/index.js';
+import { err, ok, ResultAsync } from "neverthrow";
+import type { ExecResult, LobsterError } from "../types/index.js";
 
 export interface ExecOpts {
   asUser?: string;
@@ -7,18 +7,31 @@ export interface ExecOpts {
   timeout?: number;
 }
 
-export function exec(args: string[], opts: ExecOpts = {}): ResultAsync<ExecResult, LobsterError> {
+export function exec(
+  args: string[],
+  opts: ExecOpts = {},
+): ResultAsync<ExecResult, LobsterError> {
   const timeout = opts.timeout ?? 30_000;
 
   let finalArgs = args;
-  const finalEnv: Record<string, string> = { ...process.env as Record<string, string>, ...opts.env };
+  const finalEnv: Record<string, string> = {
+    ...(process.env as Record<string, string>),
+    ...opts.env,
+  };
 
   if (opts.asUser) {
     // Wrap with sudo -u <user> -- and pass env vars
     const envPairs = opts.env
       ? Object.entries(opts.env).map(([k, v]) => `${k}=${v}`)
       : [];
-    finalArgs = ['sudo', '-u', opts.asUser, ...envPairs.map(e => `--preserve-env=${e.split('=')[0]}`), '--', ...args];
+    finalArgs = [
+      "sudo",
+      "-u",
+      opts.asUser,
+      ...envPairs.map((e) => `--preserve-env=${e.split("=")[0]}`),
+      "--",
+      ...args,
+    ];
     if (opts.env) {
       Object.assign(finalEnv, opts.env);
     }
@@ -28,8 +41,8 @@ export function exec(args: string[], opts: ExecOpts = {}): ResultAsync<ExecResul
     (async () => {
       const proc = Bun.spawn(finalArgs, {
         env: finalEnv,
-        stdout: 'pipe',
-        stderr: 'pipe',
+        stdout: "pipe",
+        stderr: "pipe",
       });
 
       const timer = setTimeout(() => proc.kill(), timeout);
@@ -42,15 +55,16 @@ export function exec(args: string[], opts: ExecOpts = {}): ResultAsync<ExecResul
       return { exitCode, stdout, stderr };
     })(),
     (e) => ({
-      code: 'EXEC_FAILED' as const,
-      message: `Failed to execute: ${finalArgs.join(' ')}`,
+      code: "EXEC_FAILED" as const,
+      message: `Failed to execute: ${finalArgs.join(" ")}`,
       cause: e,
     }),
   ).andThen((result) => {
     if (result.exitCode !== 0) {
       return err({
-        code: 'EXEC_FAILED' as const,
-        message: `Command failed (exit ${result.exitCode}): ${finalArgs.join(' ')}\n${result.stderr}`.trim(),
+        code: "EXEC_FAILED" as const,
+        message:
+          `Command failed (exit ${result.exitCode}): ${finalArgs.join(" ")}\n${result.stderr}`.trim(),
         cause: result,
       });
     }
@@ -59,17 +73,30 @@ export function exec(args: string[], opts: ExecOpts = {}): ResultAsync<ExecResul
 }
 
 /** Like exec but doesn't fail on non-zero exit — just returns the result */
-export function execUnchecked(args: string[], opts: ExecOpts = {}): ResultAsync<ExecResult, LobsterError> {
+export function execUnchecked(
+  args: string[],
+  opts: ExecOpts = {},
+): ResultAsync<ExecResult, LobsterError> {
   const timeout = opts.timeout ?? 30_000;
 
   let finalArgs = args;
-  const finalEnv: Record<string, string> = { ...process.env as Record<string, string>, ...opts.env };
+  const finalEnv: Record<string, string> = {
+    ...(process.env as Record<string, string>),
+    ...opts.env,
+  };
 
   if (opts.asUser) {
     const envPairs = opts.env
       ? Object.entries(opts.env).map(([k, v]) => `${k}=${v}`)
       : [];
-    finalArgs = ['sudo', '-u', opts.asUser, ...envPairs.map(e => `--preserve-env=${e.split('=')[0]}`), '--', ...args];
+    finalArgs = [
+      "sudo",
+      "-u",
+      opts.asUser,
+      ...envPairs.map((e) => `--preserve-env=${e.split("=")[0]}`),
+      "--",
+      ...args,
+    ];
     if (opts.env) {
       Object.assign(finalEnv, opts.env);
     }
@@ -79,8 +106,8 @@ export function execUnchecked(args: string[], opts: ExecOpts = {}): ResultAsync<
     (async () => {
       const proc = Bun.spawn(finalArgs, {
         env: finalEnv,
-        stdout: 'pipe',
-        stderr: 'pipe',
+        stdout: "pipe",
+        stderr: "pipe",
       });
 
       const timer = setTimeout(() => proc.kill(), timeout);
@@ -93,8 +120,8 @@ export function execUnchecked(args: string[], opts: ExecOpts = {}): ResultAsync<
       return { exitCode, stdout, stderr };
     })(),
     (e) => ({
-      code: 'EXEC_FAILED' as const,
-      message: `Failed to execute: ${finalArgs.join(' ')}`,
+      code: "EXEC_FAILED" as const,
+      message: `Failed to execute: ${finalArgs.join(" ")}`,
       cause: e,
     }),
   );
@@ -102,5 +129,5 @@ export function execUnchecked(args: string[], opts: ExecOpts = {}): ResultAsync<
 
 /** Get the UID for a username */
 export function getUid(username: string): ResultAsync<number, LobsterError> {
-  return exec(['id', '-u', username]).map((r) => parseInt(r.stdout.trim(), 10));
+  return exec(["id", "-u", username]).map((r) => parseInt(r.stdout.trim(), 10));
 }

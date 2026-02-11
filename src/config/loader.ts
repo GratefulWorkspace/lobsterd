@@ -1,12 +1,21 @@
-import { ok, err, ResultAsync } from 'neverthrow';
-import { chmodSync, openSync, closeSync, unlinkSync } from 'node:fs';
-import type { LobsterdConfig, TenantRegistry, LobsterError } from '../types/index.js';
-import { lobsterdConfigSchema, tenantRegistrySchema } from './schema.js';
-import { CONFIG_PATH, REGISTRY_PATH, DEFAULT_CONFIG, EMPTY_REGISTRY } from './defaults.js';
+import { chmodSync, closeSync, openSync, unlinkSync } from "node:fs";
+import { err, ok, ResultAsync } from "neverthrow";
+import type {
+  LobsterdConfig,
+  LobsterError,
+  TenantRegistry,
+} from "../types/index.js";
+import {
+  CONFIG_PATH,
+  DEFAULT_CONFIG,
+  EMPTY_REGISTRY,
+  REGISTRY_PATH,
+} from "./defaults.js";
+import { lobsterdConfigSchema, tenantRegistrySchema } from "./schema.js";
 
 // ── Lockfile helpers ────────────────────────────────────────────────────────
 
-const REGISTRY_LOCK = '/etc/lobsterd/registry.lock';
+const REGISTRY_LOCK = "/etc/lobsterd/registry.lock";
 const LOCK_TIMEOUT_MS = 10_000;
 const LOCK_POLL_MS = 100;
 
@@ -23,18 +32,22 @@ async function acquireLock(lockPath: string): Promise<void> {
   const start = Date.now();
   while (Date.now() - start < LOCK_TIMEOUT_MS) {
     try {
-      const fd = openSync(lockPath, 'wx');
-      const { writeFileSync } = await import('node:fs');
+      const fd = openSync(lockPath, "wx");
+      const { writeFileSync } = await import("node:fs");
       writeFileSync(fd, String(process.pid));
       closeSync(fd);
       return;
-    } catch (e: any) {
-      if (e.code === 'EEXIST') {
+    } catch (e: unknown) {
+      if (
+        e instanceof Error &&
+        "code" in e &&
+        (e as NodeJS.ErrnoException).code === "EEXIST"
+      ) {
         // Stale lock detection: read PID and check if alive
         try {
           const content = await Bun.file(lockPath).text();
           const pid = parseInt(content.trim(), 10);
-          if (!isNaN(pid) && !isPidAlive(pid)) {
+          if (!Number.isNaN(pid) && !isPidAlive(pid)) {
             unlinkSync(lockPath);
             continue;
           }
@@ -47,7 +60,9 @@ async function acquireLock(lockPath: string): Promise<void> {
       throw e;
     }
   }
-  throw new Error(`Timed out acquiring lock ${lockPath} after ${LOCK_TIMEOUT_MS}ms`);
+  throw new Error(
+    `Timed out acquiring lock ${lockPath} after ${LOCK_TIMEOUT_MS}ms`,
+  );
 }
 
 function releaseLock(lockPath: string): void {
@@ -64,26 +79,39 @@ function readJsonFile<T>(path: string): ResultAsync<T | null, LobsterError> {
   return ResultAsync.fromPromise(
     (async () => {
       const file = Bun.file(path);
-      if (!(await file.exists())) return null;
-      return await file.json() as T;
+      if (!(await file.exists())) {
+        return null;
+      }
+      return (await file.json()) as T;
     })(),
-    (e) => ({ code: 'CONFIG_NOT_FOUND' as const, message: `Failed to read ${path}`, cause: e }),
+    (e) => ({
+      code: "CONFIG_NOT_FOUND" as const,
+      message: `Failed to read ${path}`,
+      cause: e,
+    }),
   );
 }
 
-function writeJsonFileAtomic(path: string, data: unknown): ResultAsync<void, LobsterError> {
+function writeJsonFileAtomic(
+  path: string,
+  data: unknown,
+): ResultAsync<void, LobsterError> {
   return ResultAsync.fromPromise(
     (async () => {
       const tmpPath = `${path}.tmp.${process.pid}`;
-      await Bun.write(tmpPath, JSON.stringify(data, null, 2) + '\n');
+      await Bun.write(tmpPath, `${JSON.stringify(data, null, 2)}\n`);
       chmodSync(tmpPath, 0o600);
-      const proc = Bun.spawn(['mv', tmpPath, path]);
+      const proc = Bun.spawn(["mv", tmpPath, path]);
       await proc.exited;
       if (proc.exitCode !== 0) {
         throw new Error(`mv failed with exit code ${proc.exitCode}`);
       }
     })(),
-    (e) => ({ code: 'EXEC_FAILED' as const, message: `Failed to write ${path}`, cause: e }),
+    (e) => ({
+      code: "EXEC_FAILED" as const,
+      message: `Failed to write ${path}`,
+      cause: e,
+    }),
   );
 }
 
@@ -97,7 +125,7 @@ export function loadConfig(): ResultAsync<LobsterdConfig, LobsterError> {
     const parsed = lobsterdConfigSchema.safeParse(data);
     if (!parsed.success) {
       return err({
-        code: 'CONFIG_INVALID' as const,
+        code: "CONFIG_INVALID" as const,
         message: `Invalid config: ${parsed.error.message}`,
       });
     }
@@ -105,7 +133,9 @@ export function loadConfig(): ResultAsync<LobsterdConfig, LobsterError> {
   });
 }
 
-export function saveConfig(config: LobsterdConfig): ResultAsync<void, LobsterError> {
+export function saveConfig(
+  config: LobsterdConfig,
+): ResultAsync<void, LobsterError> {
   return writeJsonFileAtomic(CONFIG_PATH, config);
 }
 
@@ -119,7 +149,7 @@ export function loadRegistry(): ResultAsync<TenantRegistry, LobsterError> {
     const parsed = tenantRegistrySchema.safeParse(data);
     if (!parsed.success) {
       return err({
-        code: 'CONFIG_INVALID' as const,
+        code: "CONFIG_INVALID" as const,
         message: `Invalid registry: ${parsed.error.message}`,
       });
     }
@@ -127,15 +157,17 @@ export function loadRegistry(): ResultAsync<TenantRegistry, LobsterError> {
   });
 }
 
-export function saveRegistry(registry: TenantRegistry): ResultAsync<void, LobsterError> {
+export function saveRegistry(
+  registry: TenantRegistry,
+): ResultAsync<void, LobsterError> {
   return ResultAsync.fromPromise(
     (async () => {
       await acquireLock(REGISTRY_LOCK);
       try {
         const tmpPath = `${REGISTRY_PATH}.tmp.${process.pid}`;
-        await Bun.write(tmpPath, JSON.stringify(registry, null, 2) + '\n');
+        await Bun.write(tmpPath, `${JSON.stringify(registry, null, 2)}\n`);
         chmodSync(tmpPath, 0o600);
-        const proc = Bun.spawn(['mv', tmpPath, REGISTRY_PATH]);
+        const proc = Bun.spawn(["mv", tmpPath, REGISTRY_PATH]);
         await proc.exited;
         if (proc.exitCode !== 0) {
           throw new Error(`mv failed with exit code ${proc.exitCode}`);
@@ -144,6 +176,10 @@ export function saveRegistry(registry: TenantRegistry): ResultAsync<void, Lobste
         releaseLock(REGISTRY_LOCK);
       }
     })(),
-    (e) => ({ code: 'LOCK_FAILED' as const, message: `Failed to save registry: ${e instanceof Error ? e.message : String(e)}`, cause: e }),
+    (e) => ({
+      code: "LOCK_FAILED" as const,
+      message: `Failed to save registry: ${e instanceof Error ? e.message : String(e)}`,
+      cause: e,
+    }),
   );
 }

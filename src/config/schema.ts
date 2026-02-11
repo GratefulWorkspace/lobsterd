@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 export const TENANT_NAME_REGEX = /^[a-z][a-z0-9_-]*$/;
 
@@ -32,7 +32,9 @@ export const firecrackerConfigSchema = z.object({
 
 export const networkConfigSchema = z.object({
   bridgeName: z.string().min(1),
-  subnetBase: z.string().regex(/^\d+\.\d+\.\d+\.\d+$/, 'Must be a valid IPv4 address'),
+  subnetBase: z
+    .string()
+    .regex(/^\d+\.\d+\.\d+\.\d+$/, "Must be a valid IPv4 address"),
   subnetMask: z.number().int().min(8).max(30),
   gatewayPortStart: z.number().int().min(1024).max(65535),
 });
@@ -83,18 +85,25 @@ export const lobsterdConfigSchema = z.object({
 });
 
 export const tenantSchema = z.object({
-  name: z.string().min(1).regex(TENANT_NAME_REGEX, 'Lowercase alphanumeric, hyphens, underscores'),
+  name: z
+    .string()
+    .min(1)
+    .regex(TENANT_NAME_REGEX, "Lowercase alphanumeric, hyphens, underscores"),
   vmId: z.string().min(1),
   cid: z.number().int().min(3),
-  ipAddress: z.string().regex(/^\d+\.\d+\.\d+\.\d+$/, 'Must be a valid IPv4 address'),
-  hostIp: z.string().regex(/^\d+\.\d+\.\d+\.\d+$/, 'Must be a valid IPv4 address'),
+  ipAddress: z
+    .string()
+    .regex(/^\d+\.\d+\.\d+\.\d+$/, "Must be a valid IPv4 address"),
+  hostIp: z
+    .string()
+    .regex(/^\d+\.\d+\.\d+\.\d+$/, "Must be a valid IPv4 address"),
   tapDev: z.string().min(1),
   gatewayPort: z.number().int().min(1024).max(65535),
   overlayPath: z.string().min(1),
   socketPath: z.string().min(1),
   vmPid: z.number().int().nullable(),
   createdAt: z.string().datetime(),
-  status: z.enum(['active', 'suspended', 'removing']),
+  status: z.enum(["active", "suspended", "removing"]),
   gatewayToken: z.string().min(1),
   jailUid: z.number().int().min(1000),
   agentToken: z.string().min(1),

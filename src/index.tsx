@@ -1,33 +1,34 @@
 #!/usr/bin/env bun
-import { Command } from 'commander';
-import React from 'react';
-import { render } from 'ink';
-import { runInit } from './commands/init.js';
-import { loadConfig } from './config/loader.js';
-import { runSpawn } from './commands/spawn.js';
-import { runEvict } from './commands/evict.js';
-import { runMolt } from './commands/molt.js';
-import { runList, formatTable } from './commands/list.js';
-import { runSnap } from './commands/snap.js';
-import { runWatch } from './commands/watch.js';
-import { runTank } from './commands/tank.js';
-import { runLogs } from './commands/logs.js';
-import { MoltResults } from './ui/MoltProgress.js';
+import { Command } from "commander";
+import { render } from "ink";
+import { runEvict } from "./commands/evict.js";
+import { runInit } from "./commands/init.js";
+import { formatTable, runList } from "./commands/list.js";
+import { runLogs } from "./commands/logs.js";
+import { runMolt } from "./commands/molt.js";
+import { runSnap } from "./commands/snap.js";
+import { runSpawn } from "./commands/spawn.js";
+import { runTank } from "./commands/tank.js";
+import { runWatch } from "./commands/watch.js";
+import { loadConfig } from "./config/loader.js";
+import { MoltResults } from "./ui/MoltProgress.js";
 
 const program = new Command();
 
 program
-  .name('lobster')
-  .description('lobsterd — Firecracker MicroVM Tenant Orchestrator')
-  .version('0.2.0');
+  .name("lobsterd")
+  .description("lobsterd — Firecracker MicroVM Tenant Orchestrator")
+  .version("0.2.0");
 
 // ── init ──────────────────────────────────────────────────────────────────────
 
 program
-  .command('init')
-  .description('Initialize host (check KVM, Firecracker, kernel, rootfs; configure Caddy)')
+  .command("init")
+  .description(
+    "Initialize host (check KVM, Firecracker, kernel, rootfs; configure Caddy)",
+  )
   .action(async () => {
-    console.log('Initializing lobsterd host...');
+    console.log("Initializing lobsterd host...");
     const configResult = await loadConfig();
     const config = configResult.isOk() ? configResult.value : undefined;
     const result = await runInit(config);
@@ -38,21 +39,31 @@ program
     }
 
     const r = result.value;
-    console.log(`  KVM: ${r.kvmAvailable ? 'available' : 'not found'}`);
-    console.log(`  Firecracker: ${r.firecrackerFound ? 'found' : 'not found'}`);
-    console.log(`  Kernel: ${r.kernelFound ? 'found' : 'not found'}`);
-    console.log(`  Rootfs: ${r.rootfsFound ? 'found' : 'not found'}`);
-    console.log(`  Origin certs: ${r.certsInstalled ? 'installed' : 'not bundled (using ACME)'}`);
-    console.log(`  IP forwarding: ${r.ipForwardingEnabled ? 'enabled' : 'failed'}`);
-    console.log(`  Caddy: ${r.caddyConfigured ? 'configured' : 'failed'}`);
-    console.log('\nHost initialized successfully.');
+    console.log(`  KVM: ${r.kvmAvailable ? "available" : "not found"}`);
+    console.log(`  Firecracker: ${r.firecrackerFound ? "found" : "not found"}`);
+    console.log(`  Kernel: ${r.kernelFound ? "found" : "not found"}`);
+    console.log(`  Rootfs: ${r.rootfsFound ? "found" : "not found"}`);
+    console.log(
+      `  Origin certs: ${r.certsInstalled ? "installed" : "not bundled (using ACME)"}`,
+    );
+    console.log(
+      `  IP forwarding: ${r.ipForwardingEnabled ? "enabled" : "failed"}`,
+    );
+    console.log(`  Caddy: ${r.caddyConfigured ? "configured" : "failed"}`);
+    if (r.warnings.length > 0) {
+      console.log("\nSecurity warnings:");
+      for (const w of r.warnings) {
+        console.log(`  ⚠ ${w}`);
+      }
+    }
+    console.log("\nHost initialized successfully.");
   });
 
 // ── spawn ─────────────────────────────────────────────────────────────────────
 
 program
-  .command('spawn <name>')
-  .description('Add a new tenant (Firecracker microVM)')
+  .command("spawn <name>")
+  .description("Add a new tenant (Firecracker microVM)")
   .action(async (name: string) => {
     console.log(`Spawning tenant "${name}"...`);
     const result = await runSpawn(name, (p) => {
@@ -66,25 +77,29 @@ program
 
     const t = result.value;
     console.log(`\nTenant "${t.name}" spawned successfully.`);
-    console.log(`  CID: ${t.cid}  IP: ${t.ipAddress}  Port: ${t.gatewayPort}  PID: ${t.vmPid}`);
+    console.log(
+      `  CID: ${t.cid}  IP: ${t.ipAddress}  Port: ${t.gatewayPort}  PID: ${t.vmPid}`,
+    );
   });
 
 // ── evict ─────────────────────────────────────────────────────────────────────
 
 program
-  .command('evict <name>')
-  .description('Remove a tenant (with confirmation)')
-  .option('-y, --yes', 'Skip confirmation')
+  .command("evict <name>")
+  .description("Remove a tenant (with confirmation)")
+  .option("-y, --yes", "Skip confirmation")
   .action(async (name: string, opts: { yes?: boolean }) => {
     if (!opts.yes) {
-      process.stdout.write(`Remove tenant "${name}"? This destroys the VM and all data. [y/N] `);
+      process.stdout.write(
+        `Remove tenant "${name}"? This destroys the VM and all data. [y/N] `,
+      );
       const response = await new Promise<string>((resolve) => {
-        process.stdin.setEncoding('utf8');
-        process.stdin.once('data', (data) => resolve(data.toString().trim()));
+        process.stdin.setEncoding("utf8");
+        process.stdin.once("data", (data) => resolve(data.toString().trim()));
         process.stdin.resume();
       });
-      if (response.toLowerCase() !== 'y') {
-        console.log('Aborted.');
+      if (response.toLowerCase() !== "y") {
+        console.log("Aborted.");
         process.exit(0);
       }
     }
@@ -105,14 +120,16 @@ program
 // ── molt ──────────────────────────────────────────────────────────────────────
 
 program
-  .command('molt [name]')
-  .description('Idempotent repair — one tenant or all')
+  .command("molt [name]")
+  .description("Idempotent repair — one tenant or all")
   .action(async (name?: string) => {
-    const target = name ? `tenant "${name}"` : 'all tenants';
+    const target = name ? `tenant "${name}"` : "all tenants";
     console.log(`Molting ${target}...`);
 
     const result = await runMolt(name, (p) => {
-      console.log(`  [${p.tenant}] ${p.phase}${p.detail ? `: ${p.detail}` : ''}`);
+      console.log(
+        `  [${p.tenant}] ${p.phase}${p.detail ? `: ${p.detail}` : ""}`,
+      );
     });
 
     if (result.isErr()) {
@@ -132,9 +149,9 @@ program
 // ── list ──────────────────────────────────────────────────────────────────────
 
 program
-  .command('list')
-  .description('List tenants with status')
-  .option('--json', 'Output as JSON')
+  .command("list")
+  .description("List tenants with status")
+  .option("--json", "Output as JSON")
   .action(async (opts: { json?: boolean }) => {
     const result = await runList(opts);
 
@@ -153,9 +170,9 @@ program
 // ── snap ──────────────────────────────────────────────────────────────────────
 
 program
-  .command('snap <name>')
-  .description('Snapshot overlay file')
-  .option('--prune', 'Prune old snapshots beyond retention')
+  .command("snap <name>")
+  .description("Snapshot overlay file")
+  .option("--prune", "Prune old snapshots beyond retention")
   .action(async (name: string, opts: { prune?: boolean }) => {
     const result = await runSnap(name, opts);
 
@@ -170,9 +187,9 @@ program
 // ── watch ─────────────────────────────────────────────────────────────────────
 
 program
-  .command('watch')
-  .description('Start watchdog (TUI foreground, or --daemon)')
-  .option('-d, --daemon', 'Run as daemon (log to console)')
+  .command("watch")
+  .description("Start watchdog (TUI foreground, or --daemon)")
+  .option("-d, --daemon", "Run as daemon (log to console)")
   .action(async (opts: { daemon?: boolean }) => {
     const code = await runWatch(opts);
     process.exit(code);
@@ -181,8 +198,8 @@ program
 // ── tank ──────────────────────────────────────────────────────────────────────
 
 program
-  .command('tank')
-  .description('TUI dashboard showing all tenant health')
+  .command("tank")
+  .description("TUI dashboard showing all tenant health")
   .action(async () => {
     const code = await runTank();
     process.exit(code);
@@ -191,9 +208,9 @@ program
 // ── logs ──────────────────────────────────────────────────────────────────────
 
 program
-  .command('logs <name>')
-  .description('Stream tenant logs')
-  .option('-s, --service <service>', 'Service to stream logs for')
+  .command("logs <name>")
+  .description("Stream tenant logs")
+  .option("-s, --service <service>", "Service to stream logs for")
   .action(async (name: string, opts: { service?: string }) => {
     const code = await runLogs(name, opts);
     process.exit(code);
