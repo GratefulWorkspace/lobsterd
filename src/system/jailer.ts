@@ -46,15 +46,21 @@ export function buildJailerArgs(
   firecrackerBinaryPath: string,
   vmId: string,
   uid: number,
+  cgroups?: { memLimitBytes: number; cpuQuotaUs: number; cpuPeriodUs: number },
 ): string[] {
-  return [
+  const args = [
     jailerConfig.binaryPath,
     '--id', vmId,
     '--exec-file', firecrackerBinaryPath,
     '--uid', String(uid),
     '--gid', String(uid),
     '--chroot-base-dir', jailerConfig.chrootBaseDir,
-    '--',
-    '--api-sock', 'api.socket',
   ];
+  if (cgroups) {
+    args.push('--cgroup', `memory.limit_in_bytes=${cgroups.memLimitBytes}`);
+    args.push('--cgroup', `cpu.cfs_quota_us=${cgroups.cpuQuotaUs}`);
+    args.push('--cgroup', `cpu.cfs_period_us=${cgroups.cpuPeriodUs}`);
+  }
+  args.push('--', '--api-sock', 'api.socket');
+  return args;
 }

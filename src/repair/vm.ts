@@ -4,6 +4,15 @@ import * as fc from '../system/firecracker.js';
 import * as vsock from '../system/vsock.js';
 import * as jailer from '../system/jailer.js';
 
+function buildTenantConfig(tenant: Tenant, config: LobsterdConfig): Record<string, unknown> {
+  const tenantOrigin = `https://${tenant.name}.${config.caddy.domain}`;
+  const tenantConfig = structuredClone(config.openclaw.defaultConfig) as Record<string, any>;
+  const origins = tenantConfig.gateway?.controlUi?.allowedOrigins ?? [];
+  if (!origins.includes(tenantOrigin)) origins.push(tenantOrigin);
+  if (tenantConfig.gateway?.controlUi) tenantConfig.gateway.controlUi.allowedOrigins = origins;
+  return tenantConfig;
+}
+
 export function repairVmProcess(tenant: Tenant, config: LobsterdConfig): ResultAsync<RepairResult, LobsterError> {
   const actions: string[] = [];
 
@@ -23,11 +32,14 @@ export function repairVmProcess(tenant: Tenant, config: LobsterdConfig): ResultA
       // Re-spawn via jailer
       return ResultAsync.fromPromise(
         (async () => {
+          const memLimitBytes = Math.round(config.firecracker.defaultMemSizeMb * 1024 * 1024 * 1.5);
+          const cpuQuotaUs = config.firecracker.defaultVcpuCount * 100_000;
           const args = jailer.buildJailerArgs(
             config.jailer,
             config.firecracker.binaryPath,
             tenant.vmId,
             tenant.jailUid,
+            { memLimitBytes, cpuQuotaUs, cpuPeriodUs: 100_000 },
           );
           const proc = Bun.spawn(args, {
             stdout: 'ignore',
@@ -68,7 +80,6 @@ export function repairVmProcess(tenant: Tenant, config: LobsterdConfig): ResultA
     })
     .andThen(() => fc.addDrive(tenant.socketPath, 'rootfs', '/rootfs.ext4', true, config.firecracker.diskRateLimit))
     .andThen(() => fc.addDrive(tenant.socketPath, 'overlay', '/overlay.ext4', false, config.firecracker.diskRateLimit))
-    .andThen(() => fc.addVsock(tenant.socketPath, tenant.cid))
     .andThen(() => fc.addNetworkInterface(
       tenant.socketPath, 'eth0', tenant.tapDev,
       config.firecracker.networkRxRateLimit,
@@ -83,7 +94,7 @@ export function repairVmProcess(tenant: Tenant, config: LobsterdConfig): ResultA
       actions.push('Guest agent responded');
       return vsock.injectSecrets(tenant.ipAddress, config.vsock.agentPort, {
         OPENCLAW_GATEWAY_TOKEN: tenant.gatewayToken,
-        OPENCLAW_CONFIG: JSON.stringify(config.openclaw.defaultConfig),
+        OPENCLAW_CONFIG: JSON.stringify(buildTenantConfig(tenant, config)),
       }, tenant.agentToken);
     })
     .map((): RepairResult => ({
@@ -103,7 +114,7 @@ export function repairVmProcess(tenant: Tenant, config: LobsterdConfig): ResultA
 export function repairVmResponsive(tenant: Tenant, config: LobsterdConfig): ResultAsync<RepairResult, LobsterError> {
   return vsock.injectSecrets(tenant.ipAddress, config.vsock.agentPort, {
     OPENCLAW_GATEWAY_TOKEN: tenant.gatewayToken,
-    OPENCLAW_CONFIG: JSON.stringify(config.openclaw.defaultConfig),
+    OPENCLAW_CONFIG: JSON.stringify(buildTenantConfig(tenant, config)),
   }, tenant.agentToken)
     .map((): RepairResult => ({
       repair: 'vm.responsive',

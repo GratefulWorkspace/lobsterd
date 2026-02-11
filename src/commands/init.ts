@@ -116,7 +116,7 @@ function installOriginCerts(): ResultAsync<boolean, LobsterError> {
       await Bun.write(ORIGIN_CERT_PATH, bundledCert);
       await Bun.write(ORIGIN_KEY_PATH, bundledKey);
       chmodSync(ORIGIN_CERT_PATH, 0o644);
-      chmodSync(ORIGIN_KEY_PATH, 0o644);
+      chmodSync(ORIGIN_KEY_PATH, 0o640);
       return true;
     })(),
     (e) => ({ code: 'EXEC_FAILED' as const, message: 'Failed to install origin certs', cause: e }),
@@ -223,6 +223,9 @@ export function runInit(initialConfig: LobsterdConfig = DEFAULT_CONFIG): ResultA
     })
     .andThen(() => {
       result.ipForwardingEnabled = true;
+      return network.ensureChains();
+    })
+    .andThen(() => {
       return caddy.ensureCaddyRunning();
     })
     .andThen(() => caddy.writeCaddyBaseConfig(config.caddy.adminApi, config.caddy.domain, config.caddy.tls))

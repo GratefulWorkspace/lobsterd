@@ -7,9 +7,11 @@
 import { createServer } from 'net';
 import { spawn } from 'child_process';
 import { writeFileSync, readFileSync, mkdirSync, openSync } from 'fs';
+import { timingSafeEqual } from 'crypto';
 
 const VSOCK_PORT = 52;
 const HEALTH_PORT = 53;
+const MAX_MESSAGE_SIZE = 1024 * 1024; // 1MB
 let gatewayProcess = null;
 let secrets = {};
 
@@ -39,8 +41,12 @@ const AGENT_TOKEN = parseCmdlineParam('agent_token');
 const BIND_ADDR = parseGuestIp();
 
 function validateToken(msg) {
-  if (!AGENT_TOKEN) return true; // No token configured, skip validation
-  return msg && msg.token === AGENT_TOKEN;
+  if (!AGENT_TOKEN) return false; // No token configured — deny all
+  if (!msg || typeof msg.token !== 'string') return false;
+  const expected = Buffer.from(AGENT_TOKEN, 'utf-8');
+  const received = Buffer.from(msg.token, 'utf-8');
+  if (expected.length !== received.length) return false;
+  return timingSafeEqual(expected, received);
 }
 
 function startAgent() {
@@ -49,6 +55,11 @@ function startAgent() {
     conn.on('error', () => {});
     conn.on('data', (chunk) => {
       data += chunk.toString();
+      if (data.length > MAX_MESSAGE_SIZE) {
+        conn.end(JSON.stringify({ error: 'message too large' }) + '\n');
+        conn.destroy();
+        return;
+      }
       if (data.includes('\n')) {
         try {
           const msg = JSON.parse(data.trim());
@@ -86,20 +97,27 @@ function startAgent() {
 
   // Health ping listener on separate port
   const healthServer = createServer((conn) => {
+    let data = '';
     conn.on('error', () => {});
     conn.on('data', (chunk) => {
-      try {
-        const msg = JSON.parse(chunk.toString().trim());
-        if (!validateToken(msg)) {
-          conn.end(JSON.stringify({ error: 'unauthorized' }) + '\n');
-          return;
-        }
-      } catch {
-        // Non-JSON ping, reject
-        conn.end(JSON.stringify({ error: 'unauthorized' }) + '\n');
+      data += chunk.toString();
+      if (data.length > MAX_MESSAGE_SIZE) {
+        conn.end(JSON.stringify({ error: 'message too large' }) + '\n');
+        conn.destroy();
         return;
       }
-      conn.end('PONG\n');
+      if (data.includes('\n') || data.length > 0) {
+        try {
+          const msg = JSON.parse(data.trim());
+          if (!validateToken(msg)) {
+            conn.end(JSON.stringify({ error: 'unauthorized' }) + '\n');
+            return;
+          }
+          conn.end('PONG\n');
+        } catch {
+          conn.end(JSON.stringify({ error: 'unauthorized' }) + '\n');
+        }
+      }
     });
   });
 

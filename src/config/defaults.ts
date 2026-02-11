@@ -29,12 +29,12 @@ export const DEFAULT_CONFIG: LobsterdConfig = {
     defaultVcpuCount: 2,
     defaultMemSizeMb: 1024,
     networkRxRateLimit: {
-      bandwidth: { size: 12_500_000, refillTime: 1000 },
-      ops: { size: 10_000, refillTime: 1000 },
+      bandwidth: { size: 1_250_000, refillTime: 1000 },
+      ops: { size: 1_000, refillTime: 1000 },
     },
     networkTxRateLimit: {
-      bandwidth: { size: 12_500_000, refillTime: 1000 },
-      ops: { size: 10_000, refillTime: 1000 },
+      bandwidth: { size: 1_250_000, refillTime: 1000 },
+      ops: { size: 1_000, refillTime: 1000 },
     },
     diskRateLimit: {
       bandwidth: { size: 52_428_800, refillTime: 1000 },

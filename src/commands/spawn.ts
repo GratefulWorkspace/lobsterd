@@ -140,11 +140,14 @@ export function runSpawn(
     .andThen(() => {
       return ResultAsync.fromPromise(
         (async () => {
+          const memLimitBytes = Math.round(config.firecracker.defaultMemSizeMb * 1024 * 1024 * 1.5);
+          const cpuQuotaUs = config.firecracker.defaultVcpuCount * 100_000;
           const args = jailer.buildJailerArgs(
             config.jailer,
             config.firecracker.binaryPath,
             tenant.vmId,
             tenant.jailUid,
+            { memLimitBytes, cpuQuotaUs, cpuPeriodUs: 100_000 },
           );
           const proc = Bun.spawn(args, {
             stdout: 'ignore',
@@ -211,10 +214,6 @@ export function runSpawn(
       return fc.addDrive(tenant.socketPath, 'rootfs', '/rootfs.ext4', true, config.firecracker.diskRateLimit);
     })
     .andThen(() => fc.addDrive(tenant.socketPath, 'overlay', '/overlay.ext4', false, config.firecracker.diskRateLimit))
-    .andThen(() => {
-      progress('vsock', `Adding vsock (CID ${tenant.cid})`);
-      return fc.addVsock(tenant.socketPath, tenant.cid);
-    })
     .andThen(() => {
       progress('net-iface', `Adding network interface on ${tenant.tapDev}`);
       return fc.addNetworkInterface(

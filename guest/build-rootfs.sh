@@ -61,13 +61,12 @@ echo "==> Setting up init system"
 # Enable necessary services
 ln -sf /etc/init.d/networking "$MOUNT_DIR/etc/runlevels/default/networking"
 
-# Configure serial console for Firecracker
+# Configure init (serial console disabled — 8250.nr_uarts=0 in boot args)
 cat > "$MOUNT_DIR/etc/inittab" <<'INITTAB'
 ::sysinit:/sbin/openrc sysinit
 ::sysinit:/sbin/openrc boot
 ::wait:/sbin/openrc default
 ::shutdown:/sbin/openrc shutdown
-ttyS0::respawn:/sbin/getty -L 115200 ttyS0 vt100
 INITTAB
 
 # Password-less root
@@ -126,6 +125,12 @@ rm -rf "$MOUNT_DIR/usr/libexec/git-core"
 rm -f "$MOUNT_DIR/usr/bin/wget"
 # Remove compilers and development tools
 rm -f "$MOUNT_DIR/usr/bin/cc" "$MOUNT_DIR/usr/bin/gcc" "$MOUNT_DIR/usr/bin/g++"
+# Remove busybox applets useful for recon/exploitation (nc, wget, telnet, ftp, etc.)
+chroot "$MOUNT_DIR" /bin/sh -c '
+  for applet in nc wget telnet ftp tftp ftpd httpd nslookup traceroute; do
+    rm -f "/usr/bin/$applet" "/bin/$applet" "/sbin/$applet"
+  done
+'
 # Lock root password (passwordless login was for build only; serial console is disabled)
 sed -i 's/^root::/root:!:/' "$MOUNT_DIR/etc/passwd"
 
