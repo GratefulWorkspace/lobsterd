@@ -237,11 +237,16 @@ export function runSpawn(
       return vsock.waitForAgent(tenant.ipAddress, config.vsock.agentPort, config.vsock.connectTimeoutMs);
     })
     .andThen(() => {
-      // Step 9: Inject secrets
+      // Step 9: Inject secrets (build per-tenant config with correct origin)
       progress('secrets', 'Injecting API keys and gateway token');
+      const tenantOrigin = `https://${name}.${config.caddy.domain}`;
+      const tenantConfig = structuredClone(config.openclaw.defaultConfig);
+      const origins = tenantConfig.gateway?.controlUi?.allowedOrigins ?? [];
+      if (!origins.includes(tenantOrigin)) origins.push(tenantOrigin);
+      if (tenantConfig.gateway?.controlUi) tenantConfig.gateway.controlUi.allowedOrigins = origins;
       return vsock.injectSecrets(tenant.ipAddress, config.vsock.agentPort, {
         OPENCLAW_GATEWAY_TOKEN: tenant.gatewayToken,
-        OPENCLAW_CONFIG: JSON.stringify(config.openclaw.defaultConfig),
+        OPENCLAW_CONFIG: JSON.stringify(tenantConfig),
       }, tenant.agentToken);
     })
     .andThen(() => {

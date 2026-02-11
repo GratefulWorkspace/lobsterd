@@ -9,6 +9,12 @@ export const OVERLAYS_DIR = `${LOBSTERD_BASE}/overlays`;
 export const SOCKETS_DIR = `${LOBSTERD_BASE}/sockets`;
 export const KERNELS_DIR = `${LOBSTERD_BASE}/kernels`;
 export const JAILER_BASE = `${LOBSTERD_BASE}/jailer`;
+export const CERTS_DIR = `${CONFIG_DIR}/certs`;
+export const ORIGIN_CERT_PATH = `${CERTS_DIR}/origin.pem`;
+export const ORIGIN_KEY_PATH = `${CERTS_DIR}/origin-key.pem`;
+
+// Bundled cert sources (relative to project root)
+export const BUNDLED_CERTS_DIR = new URL('../../certs', import.meta.url).pathname;
 
 export const DEFAULT_CONFIG: LobsterdConfig = {
   jailer: {
@@ -43,7 +49,7 @@ export const DEFAULT_CONFIG: LobsterdConfig = {
   },
   caddy: {
     adminApi: 'http://localhost:2019',
-    domain: 'lobster.local',
+    domain: 'gradeprompt.com',
   },
   vsock: {
     agentPort: 52,
@@ -68,6 +74,10 @@ export const DEFAULT_CONFIG: LobsterdConfig = {
         bind: 'lan',
         auth: {
           mode: 'token',
+        },
+        controlUi: {
+          allowedOrigins: ['http://localhost:5173'],
+          dangerouslyDisableDeviceAuth: true,
         },
       },
       models: {
