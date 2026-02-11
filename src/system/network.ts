@@ -36,6 +36,13 @@ export function addNat(tapName: string, guestIp: string, gatewayPort: number): R
       '-j', 'MASQUERADE',
       '-m', 'comment', '--comment', `lobster:${tapName}`,
     ]),
+  ).andThen(() =>
+    exec([
+      'iptables', '-t', 'nat', '-A', 'POSTROUTING',
+      '-s', `${guestIp}/32`, '!', '-o', tapName,
+      '-j', 'MASQUERADE',
+      '-m', 'comment', '--comment', `lobster:${tapName}:outbound`,
+    ]),
   ).map(() => undefined);
 }
 
@@ -52,6 +59,14 @@ export function removeNat(tapName: string, guestIp: string, gatewayPort: number)
         '-o', tapName,
         '-j', 'MASQUERADE',
         '-m', 'comment', '--comment', `lobster:${tapName}`,
+      ]).orElse(() => okAsync({ exitCode: 0, stdout: '', stderr: '' })),
+    )
+    .andThen(() =>
+      exec([
+        'iptables', '-t', 'nat', '-D', 'POSTROUTING',
+        '-s', `${guestIp}/32`, '!', '-o', tapName,
+        '-j', 'MASQUERADE',
+        '-m', 'comment', '--comment', `lobster:${tapName}:outbound`,
       ]).orElse(() => okAsync({ exitCode: 0, stdout: '', stderr: '' })),
     )
     .map(() => undefined);
