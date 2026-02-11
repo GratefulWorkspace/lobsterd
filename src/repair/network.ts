@@ -5,10 +5,16 @@ import * as caddy from '../system/caddy.js';
 
 export function repairTap(tenant: Tenant): ResultAsync<RepairResult, LobsterError> {
   return network.createTap(tenant.tapDev, tenant.hostIp, tenant.ipAddress)
+    .andThen(() => network.addNat(tenant.tapDev, tenant.ipAddress, tenant.gatewayPort))
+    .andThen(() => network.addIsolationRules(tenant.tapDev))
     .map((): RepairResult => ({
       repair: 'net.tap',
       fixed: true,
-      actions: [`Recreated TAP device ${tenant.tapDev}`],
+      actions: [
+        `Recreated TAP device ${tenant.tapDev}`,
+        'Restored NAT rules',
+        'Restored network isolation rules',
+      ],
     }))
     .orElse(() =>
       okAsync<RepairResult, LobsterError>({

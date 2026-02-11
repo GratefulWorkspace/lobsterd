@@ -8,14 +8,32 @@ export const LOBSTERD_BASE = '/var/lib/lobsterd';
 export const OVERLAYS_DIR = `${LOBSTERD_BASE}/overlays`;
 export const SOCKETS_DIR = `${LOBSTERD_BASE}/sockets`;
 export const KERNELS_DIR = `${LOBSTERD_BASE}/kernels`;
+export const JAILER_BASE = `${LOBSTERD_BASE}/jailer`;
 
 export const DEFAULT_CONFIG: LobsterdConfig = {
+  jailer: {
+    binaryPath: '/usr/local/bin/jailer',
+    chrootBaseDir: JAILER_BASE,
+    uidStart: 10000,
+  },
   firecracker: {
     binaryPath: '/usr/local/bin/firecracker',
     kernelPath: `${KERNELS_DIR}/vmlinux`,
     rootfsPath: `${LOBSTERD_BASE}/rootfs.ext4`,
     defaultVcpuCount: 2,
     defaultMemSizeMb: 1024,
+    networkRxRateLimit: {
+      bandwidth: { size: 12_500_000, refillTime: 1000 },
+      ops: { size: 10_000, refillTime: 1000 },
+    },
+    networkTxRateLimit: {
+      bandwidth: { size: 12_500_000, refillTime: 1000 },
+      ops: { size: 10_000, refillTime: 1000 },
+    },
+    diskRateLimit: {
+      bandwidth: { size: 52_428_800, refillTime: 1000 },
+      ops: { size: 5_000, refillTime: 1000 },
+    },
   },
   network: {
     bridgeName: 'lobster0',
@@ -85,4 +103,5 @@ export const EMPTY_REGISTRY: TenantRegistry = {
   nextCid: 3,
   nextSubnetIndex: 1,
   nextGatewayPort: DEFAULT_CONFIG.network.gatewayPortStart,
+  nextJailUid: DEFAULT_CONFIG.jailer.uidStart,
 };

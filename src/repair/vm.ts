@@ -1,9 +1,8 @@
 import { ResultAsync, okAsync } from 'neverthrow';
 import type { Tenant, RepairResult, LobsterError, LobsterdConfig } from '../types/index.js';
-import { SOCKETS_DIR } from '../config/defaults.js';
 import * as fc from '../system/firecracker.js';
 import * as vsock from '../system/vsock.js';
-import { exec } from '../system/exec.js';
+import * as jailer from '../system/jailer.js';
 
 export function repairVmProcess(tenant: Tenant, config: LobsterdConfig): ResultAsync<RepairResult, LobsterError> {
   const actions: string[] = [];
@@ -17,28 +16,41 @@ export function repairVmProcess(tenant: Tenant, config: LobsterdConfig): ResultA
       }
     })(),
   )
-    .andThen(() => exec(['rm', '-f', tenant.socketPath, `${tenant.socketPath}.vsock`]).orElse(() => okAsync({ exitCode: 0, stdout: '', stderr: '' })))
+    .andThen(() => jailer.cleanupChroot(config.jailer.chrootBaseDir, tenant.vmId))
     .andThen(() => {
-      actions.push('Cleaned up stale socket');
+      actions.push('Cleaned up stale jailer chroot');
 
-      // Re-spawn Firecracker
+      // Re-spawn via jailer
       return ResultAsync.fromPromise(
         (async () => {
-          const proc = Bun.spawn([
+          const args = jailer.buildJailerArgs(
+            config.jailer,
             config.firecracker.binaryPath,
-            '--api-sock', tenant.socketPath,
-          ], {
+            tenant.vmId,
+            tenant.jailUid,
+          );
+          const proc = Bun.spawn(args, {
             stdout: 'ignore',
             stderr: 'ignore',
           });
           proc.unref();
           tenant.vmPid = proc.pid;
-          await Bun.sleep(500);
-          actions.push(`Started new Firecracker process (PID ${proc.pid})`);
+          await Bun.sleep(800);
+          actions.push(`Started new Firecracker via jailer (PID ${proc.pid})`);
         })(),
         (e): LobsterError => ({ code: 'VM_BOOT_FAILED', message: String(e) }),
       );
     })
+    .andThen(() =>
+      jailer.linkChrootFiles(
+        config.jailer.chrootBaseDir,
+        tenant.vmId,
+        config.firecracker.kernelPath,
+        config.firecracker.rootfsPath,
+        tenant.overlayPath,
+        tenant.jailUid,
+      ),
+    )
     .andThen(() =>
       fc.configureVm(tenant.socketPath, {
         vcpuCount: config.firecracker.defaultVcpuCount,
@@ -47,16 +59,21 @@ export function repairVmProcess(tenant: Tenant, config: LobsterdConfig): ResultA
     )
     .andThen(() => {
       const bootArgs = [
-        'console=ttyS0', 'reboot=k', 'panic=1', 'pci=off',
+        'reboot=k', 'panic=1', 'pci=off', '8250.nr_uarts=0',
         'init=/sbin/overlay-init',
         `ip=${tenant.ipAddress}::${tenant.hostIp}:255.255.255.252::eth0:off`,
+        `agent_token=${tenant.agentToken}`,
       ].join(' ');
-      return fc.setBootSource(tenant.socketPath, config.firecracker.kernelPath, bootArgs);
+      return fc.setBootSource(tenant.socketPath, '/vmlinux', bootArgs);
     })
-    .andThen(() => fc.addDrive(tenant.socketPath, 'rootfs', config.firecracker.rootfsPath, true))
-    .andThen(() => fc.addDrive(tenant.socketPath, 'overlay', tenant.overlayPath, false))
+    .andThen(() => fc.addDrive(tenant.socketPath, 'rootfs', '/rootfs.ext4', true, config.firecracker.diskRateLimit))
+    .andThen(() => fc.addDrive(tenant.socketPath, 'overlay', '/overlay.ext4', false, config.firecracker.diskRateLimit))
     .andThen(() => fc.addVsock(tenant.socketPath, tenant.cid))
-    .andThen(() => fc.addNetworkInterface(tenant.socketPath, 'eth0', tenant.tapDev))
+    .andThen(() => fc.addNetworkInterface(
+      tenant.socketPath, 'eth0', tenant.tapDev,
+      config.firecracker.networkRxRateLimit,
+      config.firecracker.networkTxRateLimit,
+    ))
     .andThen(() => fc.startInstance(tenant.socketPath))
     .andThen(() => {
       actions.push('VM started successfully');
@@ -67,7 +84,7 @@ export function repairVmProcess(tenant: Tenant, config: LobsterdConfig): ResultA
       return vsock.injectSecrets(tenant.ipAddress, config.vsock.agentPort, {
         OPENCLAW_GATEWAY_TOKEN: tenant.gatewayToken,
         OPENCLAW_CONFIG: JSON.stringify(config.openclaw.defaultConfig),
-      });
+      }, tenant.agentToken);
     })
     .map((): RepairResult => ({
       repair: 'vm.process',
@@ -84,11 +101,10 @@ export function repairVmProcess(tenant: Tenant, config: LobsterdConfig): ResultA
 }
 
 export function repairVmResponsive(tenant: Tenant, config: LobsterdConfig): ResultAsync<RepairResult, LobsterError> {
-  // Re-inject secrets if agent unresponsive
   return vsock.injectSecrets(tenant.ipAddress, config.vsock.agentPort, {
     OPENCLAW_GATEWAY_TOKEN: tenant.gatewayToken,
     OPENCLAW_CONFIG: JSON.stringify(config.openclaw.defaultConfig),
-  })
+  }, tenant.agentToken)
     .map((): RepairResult => ({
       repair: 'vm.responsive',
       fixed: true,
