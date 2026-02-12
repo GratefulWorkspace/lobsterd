@@ -197,16 +197,20 @@ function handleLaunchOpenclaw() {
   }
 
   const logFd = openSync("/tmp/openclaw-gateway.log", "a");
-  gatewayProcess = spawn("bun", ["/opt/openclaw/openclaw.mjs", "gateway"], {
-    env: {
-      ...process.env,
-      HOME: "/root",
-      OPENCLAW_GATEWAY_TOKEN: token,
-      OPENCLAW_GATEWAY_PORT: "9000",
-      NODE_ENV: "production",
+  gatewayProcess = spawn(
+    "bun",
+    ["/opt/openclaw/openclaw.mjs", "gateway", "--bind", "lan"],
+    {
+      env: {
+        ...process.env,
+        HOME: "/root",
+        OPENCLAW_GATEWAY_TOKEN: token,
+        OPENCLAW_GATEWAY_PORT: "9000",
+        NODE_ENV: "production",
+      },
+      stdio: ["ignore", logFd, logFd],
     },
-    stdio: ["ignore", logFd, logFd],
-  });
+  );
 
   gatewayProcess.on("exit", (code) => {
     console.log(`[lobster-agent] Gateway process exited with code ${code}`);
