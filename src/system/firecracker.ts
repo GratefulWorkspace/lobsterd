@@ -141,17 +141,13 @@ export function sendCtrlAltDel(
   }).map(() => undefined);
 }
 
-export function pauseVm(
-  socketPath: string,
-): ResultAsync<void, LobsterError> {
+export function pauseVm(socketPath: string): ResultAsync<void, LobsterError> {
   return fcApi(socketPath, "PATCH", "/vm", {
     state: "Paused",
   }).map(() => undefined);
 }
 
-export function resumeVm(
-  socketPath: string,
-): ResultAsync<void, LobsterError> {
+export function resumeVm(socketPath: string): ResultAsync<void, LobsterError> {
   return fcApi(socketPath, "PATCH", "/vm", {
     state: "Resumed",
   }).map(() => undefined);

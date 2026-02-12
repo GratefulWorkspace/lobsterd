@@ -212,8 +212,9 @@ freeing all RAM while preserving full VM state. Resume restores the VM from
 snapshot in ~3 seconds, transparently to connected clients.
 
 **Idle detection** — The watchdog scheduler polls each tenant's guest agent for
-active connections. When a tenant has zero connections for longer than
-`idleThresholdMs` (default 10 seconds), it is automatically suspended.
+active connections (both inbound and outbound). When a tenant has zero
+connections for longer than `idleThresholdMs` (default 45 seconds), it is
+automatically suspended.
 
 **Wake-on-request** — While a VM is suspended, a lightweight TCP sentinel binds
 the guest IP on the host loopback and listens on the gateway port. When Caddy's

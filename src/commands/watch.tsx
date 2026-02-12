@@ -88,9 +88,7 @@ export async function runWatch(
     });
 
     handle.emitter.on("suspend-start", (data) => {
-      console.log(
-        `[${new Date().toISOString()}] ${data.tenant}: suspending`,
-      );
+      console.log(`[${new Date().toISOString()}] ${data.tenant}: suspending`);
     });
 
     handle.emitter.on("suspend-complete", (data) => {

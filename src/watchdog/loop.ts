@@ -59,7 +59,8 @@ export function startWatchdog(
           continue;
         }
         if (tenant.status === "suspended") {
-          const oldState = (tenantStates[tenant.name] ?? initialWatchState()).state;
+          const oldState = (tenantStates[tenant.name] ?? initialWatchState())
+            .state;
           if (oldState !== "SUSPENDED") {
             tenantStates[tenant.name] = {
               ...initialWatchState(),

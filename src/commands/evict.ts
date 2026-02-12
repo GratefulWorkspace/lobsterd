@@ -1,7 +1,7 @@
 import { errAsync, okAsync, ResultAsync } from "neverthrow";
 import { loadConfig, loadRegistry, saveRegistry } from "../config/loader.js";
-import { exec } from "../system/exec.js";
 import * as caddy from "../system/caddy.js";
+import { exec } from "../system/exec.js";
 import * as fc from "../system/firecracker.js";
 import * as image from "../system/image.js";
 import * as jailer from "../system/jailer.js";

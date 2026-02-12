@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { errAsync, okAsync, ResultAsync } from "neverthrow";
+import { errAsync, okAsync, type ResultAsync } from "neverthrow";
 import { SNAPSHOTS_DIR } from "../config/defaults.js";
 import { loadConfig, loadRegistry, saveRegistry } from "../config/loader.js";
 import { exec } from "../system/exec.js";
@@ -149,7 +149,9 @@ export function runSuspend(
         );
         let nextWakeAtMs: number | null = null;
         if (futureSchedules.length > 0) {
-          const earliest = Math.min(...futureSchedules.map((s) => s.nextRunAtMs));
+          const earliest = Math.min(
+            ...futureSchedules.map((s) => s.nextRunAtMs),
+          );
           nextWakeAtMs = earliest - config.watchdog.cronWakeAheadMs;
         }
 

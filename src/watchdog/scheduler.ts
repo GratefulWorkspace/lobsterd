@@ -2,11 +2,7 @@ import { runResume } from "../commands/resume.js";
 import { runSuspend } from "../commands/suspend.js";
 import { execUnchecked } from "../system/exec.js";
 import * as vsock from "../system/vsock.js";
-import type {
-  LobsterdConfig,
-  Tenant,
-  TenantRegistry,
-} from "../types/index.js";
+import type { LobsterdConfig, Tenant, TenantRegistry } from "../types/index.js";
 import type { WatchdogEmitter } from "./events.js";
 
 export interface SchedulerHandle {
@@ -156,7 +152,12 @@ export function startScheduler(
         vmPid: result.value.vmPid,
       });
       clearCronTimer(name);
-      idleSince.delete(name);
+      if (trigger === "cron") {
+        // Give the cron job time to start and establish connections
+        idleSince.set(name, Date.now() + config.watchdog.cronWakeAheadMs);
+      } else {
+        idleSince.delete(name);
+      }
     } else {
       emitter.emit("resume-failed", {
         tenant: name,

@@ -131,17 +131,15 @@ export function runResume(
     .andThen(() => {
       // Step 5: Load snapshot (VM resumes instantly)
       progress("resume", "Loading snapshot and resuming VM");
-      return fc.loadSnapshot(
-        tenant.socketPath,
-        "/snapshot_file",
-        "/mem_file",
-      );
+      return fc.loadSnapshot(tenant.socketPath, "/snapshot_file", "/mem_file");
     })
     .andThen(() => {
       // Step 6: Clean up snapshot files from persistent storage
       progress("cleanup", "Removing snapshot from persistent storage");
       const snapshotDir = tenant.suspendInfo!.snapshotDir;
-      return exec(["rm", "-rf", snapshotDir]).orElse(() => okAsync({ exitCode: 0, stdout: "", stderr: "" }));
+      return exec(["rm", "-rf", snapshotDir]).orElse(() =>
+        okAsync({ exitCode: 0, stdout: "", stderr: "" }),
+      );
     })
     .andThen(() => {
       // Step 7: Update registry

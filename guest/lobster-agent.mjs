@@ -286,14 +286,26 @@ function handleGetActiveConnections() {
     let count = 0;
     for (const line of lines) {
       const parts = line.trim().split(/\s+/);
-      if (parts.length < 4) continue;
-      const localAddr = parts[1]; // hex ip:port
-      const state = parts[3]; // connection state
-      const port = parseInt(localAddr.split(":")[1], 16);
-      // port 9000 = 0x2328, state 01 = ESTABLISHED
-      if (port === 9000 && state === "01") {
-        count++;
+      if (parts.length < 4) {
+        continue;
       }
+      const localAddr = parts[1]; // hex ip:port
+      const remoteAddr = parts[2]; // hex ip:port
+      const state = parts[3]; // connection state
+      // state 01 = ESTABLISHED
+      if (state !== "01") {
+        continue;
+      }
+      // Exclude the agent's own ports (52, 53) to avoid self-counting
+      const localPort = parseInt(localAddr.split(":")[1], 16);
+      const remotePort = parseInt(remoteAddr.split(":")[1], 16);
+      if (localPort === VSOCK_PORT || localPort === HEALTH_PORT) {
+        continue;
+      }
+      if (remotePort === VSOCK_PORT || remotePort === HEALTH_PORT) {
+        continue;
+      }
+      count++;
     }
     return JSON.stringify({ activeConnections: count });
   } catch {
