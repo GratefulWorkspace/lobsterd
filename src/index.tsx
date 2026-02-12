@@ -2,7 +2,7 @@
 import { Command } from "commander";
 import { render } from "ink";
 import { runEvict } from "./commands/evict.js";
-import { preflight } from "./commands/init.js";
+import { preflight, runInit } from "./commands/init.js";
 import { runLogs } from "./commands/logs.js";
 import { runMolt } from "./commands/molt.js";
 import { runSnap } from "./commands/snap.js";
@@ -29,7 +29,9 @@ program
 program
   .command("init")
   .description("Initialize host (install deps, check KVM, configure Caddy)")
-  .action(async () => {
+  .option("-d, --domain <domain>", "Domain for tenant routes")
+  .option("-y, --yes", "Skip confirmation and auto-install missing deps")
+  .action(async (opts: { domain?: string; yes?: boolean }) => {
     const configResult = await loadConfig();
     const config = configResult.isOk() ? configResult.value : DEFAULT_CONFIG;
 
@@ -46,6 +48,24 @@ program
       process.exit(1);
     }
 
+    // Non-interactive mode: --yes provided
+    if (opts.yes) {
+      console.log("Initializing host...");
+      const result = await runInit(config, {
+        domain: opts.domain,
+        install: { ...pre.value.missing },
+      });
+
+      if (result.isErr()) {
+        console.error(`\n✗ ${result.error.message}`);
+        process.exit(1);
+      }
+
+      console.log("\nHost initialized successfully.");
+      return;
+    }
+
+    // Interactive mode
     const { waitUntilExit } = render(
       <InitFlow preflight={pre.value} config={config} />,
     );

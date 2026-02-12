@@ -70,7 +70,7 @@ export const watchdogConfigSchema = z.object({
 
 export const openclawConfigSchema = z.object({
   installPath: z.string().min(1),
-  defaultConfig: z.record(z.unknown()),
+  defaultConfig: z.record(z.string(), z.unknown()),
 });
 
 export const buoyConfigSchema = z.object({
