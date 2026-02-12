@@ -213,7 +213,7 @@ snapshot in ~3 seconds, transparently to connected clients.
 
 **Idle detection** — The watchdog scheduler polls each tenant's guest agent for
 active connections. When a tenant has zero connections for longer than
-`idleThresholdMs` (default 5 minutes), it is automatically suspended.
+`idleThresholdMs` (default 10 seconds), it is automatically suspended.
 
 **Wake-on-request** — While a VM is suspended, a lightweight TCP sentinel binds
 the guest IP on the host loopback and listens on the gateway port. When Caddy's

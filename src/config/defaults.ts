@@ -71,7 +71,7 @@ export const DEFAULT_CONFIG: LobsterdConfig = {
     intervalMs: 30_000,
     maxRepairAttempts: 3,
     repairCooldownMs: 60_000,
-    idleThresholdMs: 300_000,
+    idleThresholdMs: 10_000,
     cronWakeAheadMs: 60_000,
     trafficPollMs: 5_000,
   },
