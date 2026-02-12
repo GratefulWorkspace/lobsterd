@@ -57,7 +57,70 @@ sudo lobsterd logs <name>
 
 # Snapshot a tenant's overlay
 sudo lobsterd snap <name>
+
+# Start the REST API server
+sudo lobsterd buoy
 ```
+
+## REST API (buoy)
+
+`lobsterd buoy` starts a local HTTP server that mirrors the CLI. A bearer token
+is auto-generated on first run and stored in `/etc/lobsterd/config.json`.
+
+```bash
+sudo lobsterd buoy [--port 7070] [--host 127.0.0.1]
+```
+
+The server prints the token on startup — pass it as `Authorization: Bearer <token>`.
+
+### Endpoints
+
+```
+GET  /health                  # server status (public, no auth)
+GET  /openapi.json            # OpenAPI 3.1 spec (public)
+
+GET  /tenants                 # list all tenants with health state
+POST /tenants                 # spawn a new tenant
+DELETE /tenants/{name}        # evict a tenant
+
+POST /tenants/{name}/molt     # health-check and repair
+POST /tenants/{name}/snap     # snapshot overlay to tarball
+
+GET  /tenants/{name}/token    # get gateway token
+GET  /tenants/{name}/logs     # fetch tenant logs
+```
+
+### Examples
+
+```bash
+TOKEN="<your-token>"
+
+# List tenants
+curl -H "Authorization: Bearer $TOKEN" http://localhost:7070/tenants
+
+# Spawn a tenant
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "my-tenant", "apiKey": "sk-..."}' \
+  http://localhost:7070/tenants
+
+# Health-check a tenant
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  http://localhost:7070/tenants/my-tenant/molt
+
+# Evict a tenant
+curl -X DELETE -H "Authorization: Bearer $TOKEN" \
+  http://localhost:7070/tenants/my-tenant
+```
+
+### Agent lockdown
+
+Agent lockdown is enabled by default. This adds iptables OUTPUT rules that
+restrict access to the guest agent ports (52/53) to **root-only** processes on
+the host. Even if a non-root user discovers a tenant's guest IP, they cannot
+query the agent, inject secrets, or control the VM — the kernel drops the packet
+before it leaves the host. This closes the last local privilege escalation path
+from unprivileged host users to the guest control plane.
 
 ## Architecture
 
@@ -131,6 +194,7 @@ tuning).
 src/
   index.tsx           CLI entry point (commander)
   commands/           init, spawn, evict, molt, snap, watch, tank, logs
+  reef/               REST API server (Hono + OpenAPI)
   system/             firecracker API, networking, caddy, overlay images, agent TCP
   config/             zod schemas, defaults, JSON loader with file locking
   checks/             VM and network health checks

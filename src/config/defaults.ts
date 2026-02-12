@@ -1,4 +1,8 @@
-import type { LobsterdConfig, TenantRegistry } from "../types/index.js";
+import type {
+  BuoyConfig,
+  LobsterdConfig,
+  TenantRegistry,
+} from "../types/index.js";
 
 export const CONFIG_DIR = "/etc/lobsterd";
 export const CONFIG_PATH = `${CONFIG_DIR}/config.json`;
@@ -83,6 +87,13 @@ export const DEFAULT_CONFIG: LobsterdConfig = {
       },
     },
   },
+};
+
+export const DEFAULT_BUOY_CONFIG: BuoyConfig = {
+  port: 7070,
+  host: "127.0.0.1",
+  apiToken: "",
+  agentLockdown: true,
 };
 
 export const EMPTY_REGISTRY: TenantRegistry = {

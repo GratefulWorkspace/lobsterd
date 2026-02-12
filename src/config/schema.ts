@@ -70,7 +70,14 @@ export const watchdogConfigSchema = z.object({
 
 export const openclawConfigSchema = z.object({
   installPath: z.string().min(1),
-  defaultConfig: z.record(z.unknown()),
+  defaultConfig: z.record(z.string(), z.unknown()),
+});
+
+export const buoyConfigSchema = z.object({
+  port: z.number().int().min(1).max(65535),
+  host: z.string().min(1),
+  apiToken: z.string().min(1),
+  agentLockdown: z.boolean(),
 });
 
 export const lobsterdConfigSchema = z.object({
@@ -82,6 +89,7 @@ export const lobsterdConfigSchema = z.object({
   overlay: overlayConfigSchema,
   watchdog: watchdogConfigSchema,
   openclaw: openclawConfigSchema,
+  buoy: buoyConfigSchema.optional(),
 });
 
 export const tenantSchema = z.object({

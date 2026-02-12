@@ -4,6 +4,7 @@ import { exec, execUnchecked } from "./exec.js";
 
 const CHAIN_INPUT = "LOBSTER-INPUT";
 const CHAIN_FORWARD = "LOBSTER-FORWARD";
+const CHAIN_OUTPUT = "LOBSTER-OUTPUT";
 const GUEST_GATEWAY_PORT = 9000;
 const CONNLIMIT_PER_TENANT = 1024;
 
@@ -13,6 +14,7 @@ export function ensureChains(): ResultAsync<void, LobsterError> {
   return (
     execUnchecked(["iptables", "-N", CHAIN_INPUT])
       .andThen(() => execUnchecked(["iptables", "-N", CHAIN_FORWARD]))
+      .andThen(() => execUnchecked(["iptables", "-N", CHAIN_OUTPUT]))
       // Insert jumps at position 1 so they take priority over anything else.
       // First check if the jump already exists to avoid duplicates.
       .andThen(() =>
@@ -38,6 +40,22 @@ export function ensureChains(): ResultAsync<void, LobsterError> {
             "1",
             "-j",
             CHAIN_FORWARD,
+          ]).map(() => undefined);
+        }
+        return okAsync(undefined);
+      })
+      .andThen(() =>
+        execUnchecked(["iptables", "-C", "OUTPUT", "-j", CHAIN_OUTPUT]),
+      )
+      .andThen((r) => {
+        if (r.exitCode !== 0) {
+          return exec([
+            "iptables",
+            "-I",
+            "OUTPUT",
+            "1",
+            "-j",
+            CHAIN_OUTPUT,
           ]).map(() => undefined);
         }
         return okAsync(undefined);
@@ -539,6 +557,182 @@ export function removeIsolationRules(
         "-j",
         "ACCEPT",
         ...comment("outbound"),
+      ]).orElse(ignore),
+    )
+    .map(() => undefined);
+}
+
+/** Add OUTPUT rules restricting host→guest agent port access to root only. */
+export function addAgentLockdownRules(
+  guestIp: string,
+  agentPort: number,
+  healthPort: number,
+): ResultAsync<void, LobsterError> {
+  const comment = (suffix: string) => [
+    "-m",
+    "comment",
+    "--comment",
+    `lobster:lockdown:${guestIp}:${suffix}`,
+  ];
+
+  // For each agent port: ACCEPT for root (uid 0), DROP for everyone else
+  return exec([
+    "iptables",
+    "-A",
+    CHAIN_OUTPUT,
+    "-d",
+    guestIp,
+    "-p",
+    "tcp",
+    "--dport",
+    String(agentPort),
+    "-m",
+    "owner",
+    "--uid-owner",
+    "0",
+    "-j",
+    "ACCEPT",
+    ...comment("agent-root"),
+  ])
+    .andThen(() =>
+      exec([
+        "iptables",
+        "-A",
+        CHAIN_OUTPUT,
+        "-d",
+        guestIp,
+        "-p",
+        "tcp",
+        "--dport",
+        String(healthPort),
+        "-m",
+        "owner",
+        "--uid-owner",
+        "0",
+        "-j",
+        "ACCEPT",
+        ...comment("health-root"),
+      ]),
+    )
+    .andThen(() =>
+      exec([
+        "iptables",
+        "-A",
+        CHAIN_OUTPUT,
+        "-d",
+        guestIp,
+        "-p",
+        "tcp",
+        "--dport",
+        String(agentPort),
+        "-j",
+        "DROP",
+        ...comment("agent-drop"),
+      ]),
+    )
+    .andThen(() =>
+      exec([
+        "iptables",
+        "-A",
+        CHAIN_OUTPUT,
+        "-d",
+        guestIp,
+        "-p",
+        "tcp",
+        "--dport",
+        String(healthPort),
+        "-j",
+        "DROP",
+        ...comment("health-drop"),
+      ]),
+    )
+    .map(() => undefined);
+}
+
+/** Remove OUTPUT agent lockdown rules for a guest. */
+export function removeAgentLockdownRules(
+  guestIp: string,
+  agentPort: number,
+  healthPort: number,
+): ResultAsync<void, LobsterError> {
+  const comment = (suffix: string) => [
+    "-m",
+    "comment",
+    "--comment",
+    `lobster:lockdown:${guestIp}:${suffix}`,
+  ];
+  const ignore = () =>
+    okAsync({ exitCode: 0, stdout: "", stderr: "" } as const);
+
+  return exec([
+    "iptables",
+    "-D",
+    CHAIN_OUTPUT,
+    "-d",
+    guestIp,
+    "-p",
+    "tcp",
+    "--dport",
+    String(agentPort),
+    "-m",
+    "owner",
+    "--uid-owner",
+    "0",
+    "-j",
+    "ACCEPT",
+    ...comment("agent-root"),
+  ])
+    .orElse(ignore)
+    .andThen(() =>
+      exec([
+        "iptables",
+        "-D",
+        CHAIN_OUTPUT,
+        "-d",
+        guestIp,
+        "-p",
+        "tcp",
+        "--dport",
+        String(healthPort),
+        "-m",
+        "owner",
+        "--uid-owner",
+        "0",
+        "-j",
+        "ACCEPT",
+        ...comment("health-root"),
+      ]).orElse(ignore),
+    )
+    .andThen(() =>
+      exec([
+        "iptables",
+        "-D",
+        CHAIN_OUTPUT,
+        "-d",
+        guestIp,
+        "-p",
+        "tcp",
+        "--dport",
+        String(agentPort),
+        "-j",
+        "DROP",
+        ...comment("agent-drop"),
+      ]).orElse(ignore),
+    )
+    .andThen(() =>
+      exec([
+        "iptables",
+        "-D",
+        CHAIN_OUTPUT,
+        "-d",
+        guestIp,
+        "-p",
+        "tcp",
+        "--dport",
+        String(healthPort),
+        "-j",
+        "DROP",
+        ...comment("health-drop"),
       ]).orElse(ignore),
     )
     .map(() => undefined);

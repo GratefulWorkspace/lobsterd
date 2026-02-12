@@ -84,6 +84,20 @@ export function runEvict(
           .orElse(() => okAsync(undefined));
       })
       .andThen(() => {
+        // Step 3b: Remove agent lockdown rules (if enabled)
+        if (config.buoy?.agentLockdown) {
+          progress("lockdown", "Removing agent lockdown rules");
+          return network
+            .removeAgentLockdownRules(
+              tenant.ipAddress,
+              config.vsock.agentPort,
+              config.vsock.healthPort,
+            )
+            .orElse(() => okAsync(undefined));
+        }
+        return okAsync(undefined);
+      })
+      .andThen(() => {
         // Step 4: Delete TAP + remove NAT
         progress("network", `Deleting TAP ${tenant.tapDev} and NAT rules`);
         return network

@@ -139,6 +139,13 @@ export interface OpenclawConfig {
   defaultConfig: OpenclawDefaultConfig;
 }
 
+export interface BuoyConfig {
+  port: number;
+  host: string;
+  apiToken: string;
+  agentLockdown: boolean;
+}
+
 export interface LobsterdConfig {
   jailer: JailerConfig;
   firecracker: FirecrackerConfig;
@@ -148,6 +155,7 @@ export interface LobsterdConfig {
   overlay: OverlayConfig;
   watchdog: WatchdogConfig;
   openclaw: OpenclawConfig;
+  buoy?: BuoyConfig;
 }
 
 // ── Guest Stats ─────────────────────────────────────────────────────────────
@@ -196,6 +204,7 @@ export type ErrorCode =
   | "PERMISSION_DENIED"
   | "VALIDATION_FAILED"
   | "LOCK_FAILED"
+  | "BUOY_ALREADY_RUNNING"
   | "UNKNOWN";
 
 export interface LobsterError {

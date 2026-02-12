@@ -2,7 +2,7 @@
 import { Command } from "commander";
 import { render } from "ink";
 import { runEvict } from "./commands/evict.js";
-import { preflight } from "./commands/init.js";
+import { preflight, runInit } from "./commands/init.js";
 import { runLogs } from "./commands/logs.js";
 import { runMolt } from "./commands/molt.js";
 import { runSnap } from "./commands/snap.js";
@@ -12,6 +12,7 @@ import { runWatch } from "./commands/watch.js";
 import { DEFAULT_CONFIG } from "./config/defaults.js";
 import { loadConfig, loadRegistry } from "./config/loader.js";
 import { buildProviderConfig, PROVIDER_DEFAULTS } from "./config/models.js";
+import { startBuoy } from "./reef/index.js";
 import { InitFlow } from "./ui/InitFlow.js";
 import { MoltResults } from "./ui/MoltProgress.js";
 import { SpawnFlow } from "./ui/SpawnFlow.js";
@@ -28,7 +29,9 @@ program
 program
   .command("init")
   .description("Initialize host (install deps, check KVM, configure Caddy)")
-  .action(async () => {
+  .option("-d, --domain <domain>", "Domain for tenant routes")
+  .option("-y, --yes", "Skip confirmation and auto-install missing deps")
+  .action(async (opts: { domain?: string; yes?: boolean }) => {
     const configResult = await loadConfig();
     const config = configResult.isOk() ? configResult.value : DEFAULT_CONFIG;
 
@@ -45,6 +48,24 @@ program
       process.exit(1);
     }
 
+    // Non-interactive mode: --yes provided
+    if (opts.yes) {
+      console.log("Initializing host...");
+      const result = await runInit(config, {
+        domain: opts.domain,
+        install: { ...pre.value.missing },
+      });
+
+      if (result.isErr()) {
+        console.error(`\n✗ ${result.error.message}`);
+        process.exit(1);
+      }
+
+      console.log("\nHost initialized successfully.");
+      return;
+    }
+
+    // Interactive mode
     const { waitUntilExit } = render(
       <InitFlow preflight={pre.value} config={config} />,
     );
@@ -247,6 +268,17 @@ program
       process.exit(1);
     }
     console.log(tenant.gatewayToken);
+  });
+
+// ── buoy ─────────────────────────────────────────────────────────────────────
+
+program
+  .command("buoy")
+  .description("Start the local REST API server")
+  .option("-p, --port <port>", "Port to listen on", Number.parseInt)
+  .option("-H, --host <host>", "Host to bind to")
+  .action(async (opts: { port?: number; host?: string }) => {
+    await startBuoy(opts);
   });
 
 program.parse();

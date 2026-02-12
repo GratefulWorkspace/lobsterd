@@ -11,18 +11,7 @@ import type {
 import type { TenantExtraInfo } from "../ui/Dashboard.js";
 import { Dashboard } from "../ui/Dashboard.js";
 import { initialWatchState, transition } from "../watchdog/state.js";
-
-function quickPidCheck(tenant: Tenant): string {
-  if (!tenant.vmPid) {
-    return "dead";
-  }
-  try {
-    process.kill(tenant.vmPid, 0);
-    return String(tenant.vmPid);
-  } catch {
-    return "dead";
-  }
-}
+import { buildTankEntries, quickPidCheck } from "./tank-data.js";
 
 function TankApp({
   tenants,
@@ -144,42 +133,7 @@ export async function runTank(opts?: { json?: boolean }): Promise<number> {
   }
 
   if (opts?.json) {
-    const entries = await Promise.all(
-      registry.tenants.map(async (tenant) => {
-        const pidStatus = quickPidCheck(tenant);
-        let memoryMb: number | undefined;
-
-        if (pidStatus !== "dead") {
-          const stats = await vsock
-            .getStats(
-              tenant.ipAddress,
-              config.vsock.agentPort,
-              tenant.agentToken,
-            )
-            .unwrapOr(undefined);
-          if (stats && stats.memoryKb > 0) {
-            memoryMb = Math.round(stats.memoryKb / 1024);
-          }
-        }
-
-        const checkResult = await runAllChecks(tenant, config);
-        const state = checkResult.isOk()
-          ? transition(initialWatchState(), checkResult.value, config.watchdog)
-              .next.state
-          : "UNKNOWN";
-
-        return {
-          name: tenant.name,
-          cid: tenant.cid,
-          ip: tenant.ipAddress,
-          port: tenant.gatewayPort,
-          vmPid: pidStatus,
-          status: tenant.status,
-          memoryMb,
-          state,
-        };
-      }),
-    );
+    const entries = await buildTankEntries(registry.tenants, config);
     console.log(JSON.stringify(entries, null, 2));
     return 0;
   }

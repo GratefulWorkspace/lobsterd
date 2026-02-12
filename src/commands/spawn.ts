@@ -174,6 +174,30 @@ export function runSpawn(
     .andThen(() => {
       undoStack.push(() => network.removeIsolationRules(tenant.tapDev));
 
+      // Step 4b: Agent lockdown (if enabled)
+      if (config.buoy?.agentLockdown) {
+        progress("lockdown", "Adding agent lockdown rules");
+        return network
+          .addAgentLockdownRules(
+            tenant.ipAddress,
+            config.vsock.agentPort,
+            config.vsock.healthPort,
+          )
+          .map(() => undefined)
+          .andThen(() => {
+            undoStack.push(() =>
+              network.removeAgentLockdownRules(
+                tenant.ipAddress,
+                config.vsock.agentPort,
+                config.vsock.healthPort,
+              ),
+            );
+            return okAsync(undefined);
+          });
+      }
+      return okAsync(undefined);
+    })
+    .andThen(() => {
       // Step 5: Spawn Firecracker via jailer
       progress("firecracker", "Starting Firecracker microVM via jailer");
 
