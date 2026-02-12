@@ -93,7 +93,7 @@ export const DEFAULT_BUOY_CONFIG: BuoyConfig = {
   port: 7070,
   host: "127.0.0.1",
   apiToken: "",
-  agentLockdown: false,
+  agentLockdown: true,
 };
 
 export const EMPTY_REGISTRY: TenantRegistry = {
