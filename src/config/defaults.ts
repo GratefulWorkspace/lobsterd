@@ -76,7 +76,7 @@ export const DEFAULT_CONFIG: LobsterdConfig = {
     defaultConfig: {
       gateway: {
         mode: "local",
-        bind: "lan",
+        bind: "loopback",
         auth: {
           mode: "token",
         },
