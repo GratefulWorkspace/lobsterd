@@ -1,6 +1,10 @@
 import { Socket } from "node:net";
 import { ResultAsync } from "neverthrow";
-import type { GuestStats, LobsterError } from "../types/index.js";
+import type {
+  CronScheduleInfo,
+  GuestStats,
+  LobsterError,
+} from "../types/index.js";
 
 function tcpSend(
   host: string,
@@ -150,6 +154,50 @@ export function getStats(
     () => ({
       code: "VSOCK_CONNECT_FAILED" as const,
       message: `Stats request failed for ${guestIp}`,
+    }),
+  );
+}
+
+export function getCronSchedules(
+  guestIp: string,
+  port: number,
+  agentToken: string,
+): ResultAsync<CronScheduleInfo[], LobsterError> {
+  const payload = JSON.stringify({
+    type: "get-cron-schedules",
+    token: agentToken,
+  });
+  return ResultAsync.fromPromise(
+    (async () => {
+      const response = await tcpSend(guestIp, port, `${payload}\n`, 5000);
+      const data = JSON.parse(response.trim());
+      return (data.schedules ?? []) as CronScheduleInfo[];
+    })(),
+    () => ({
+      code: "VSOCK_CONNECT_FAILED" as const,
+      message: `Cron schedules request failed for ${guestIp}`,
+    }),
+  );
+}
+
+export function getActiveConnections(
+  guestIp: string,
+  port: number,
+  agentToken: string,
+): ResultAsync<number, LobsterError> {
+  const payload = JSON.stringify({
+    type: "get-active-connections",
+    token: agentToken,
+  });
+  return ResultAsync.fromPromise(
+    (async () => {
+      const response = await tcpSend(guestIp, port, `${payload}\n`, 3000);
+      const data = JSON.parse(response.trim());
+      return (data.activeConnections ?? 0) as number;
+    })(),
+    () => ({
+      code: "VSOCK_CONNECT_FAILED" as const,
+      message: `Active connections request failed for ${guestIp}`,
     }),
   );
 }

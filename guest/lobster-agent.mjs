@@ -160,6 +160,10 @@ function handleMessage(msg) {
       } catch {
         return "No logs available";
       }
+    case "get-cron-schedules":
+      return handleGetCronSchedules();
+    case "get-active-connections":
+      return handleGetActiveConnections();
     case "shutdown":
       return handleShutdown();
     default:
@@ -252,6 +256,48 @@ function handleGetStats() {
     return JSON.stringify({ gatewayPid: gatewayProcess.pid, memoryKb });
   } catch {
     return JSON.stringify({ gatewayPid: gatewayProcess.pid, memoryKb: 0 });
+  }
+}
+
+function handleGetCronSchedules() {
+  try {
+    const raw = readFileSync("/root/.openclaw/cron/jobs.json", "utf-8");
+    const data = JSON.parse(raw);
+    if (data.version !== 1 || !Array.isArray(data.jobs)) {
+      return JSON.stringify({ schedules: [] });
+    }
+    const schedules = data.jobs
+      .filter((j) => j.enabled !== false && j.state && j.state.nextRunAtMs > 0)
+      .map((j) => ({
+        id: j.id,
+        name: j.name || j.id,
+        nextRunAtMs: j.state.nextRunAtMs,
+      }));
+    return JSON.stringify({ schedules });
+  } catch {
+    return JSON.stringify({ schedules: [] });
+  }
+}
+
+function handleGetActiveConnections() {
+  try {
+    const tcp = readFileSync("/proc/net/tcp", "utf-8");
+    const lines = tcp.trim().split("\n").slice(1); // skip header
+    let count = 0;
+    for (const line of lines) {
+      const parts = line.trim().split(/\s+/);
+      if (parts.length < 4) continue;
+      const localAddr = parts[1]; // hex ip:port
+      const state = parts[3]; // connection state
+      const port = parseInt(localAddr.split(":")[1], 16);
+      // port 9000 = 0x2328, state 01 = ESTABLISHED
+      if (port === 9000 && state === "01") {
+        count++;
+      }
+    }
+    return JSON.stringify({ activeConnections: count });
+  } catch {
+    return JSON.stringify({ activeConnections: 0 });
   }
 }
 

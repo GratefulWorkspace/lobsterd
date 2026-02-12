@@ -12,6 +12,7 @@ export const WATCH_STATE_COLORS: Record<WatchState, string> = {
   DEGRADED: "yellow",
   FAILED: "red",
   RECOVERING: "cyan",
+  SUSPENDED: "blue",
 };
 
 export const STATUS_SYMBOLS: Record<HealthStatus, string> = {
@@ -26,6 +27,7 @@ export const WATCH_STATE_SYMBOLS: Record<WatchState, string> = {
   DEGRADED: "◐",
   FAILED: "✗",
   RECOVERING: "↻",
+  SUSPENDED: "⏸",
 };
 
 export const LOBSTER = "🦞";

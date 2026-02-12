@@ -6,8 +6,10 @@ import { runExec } from "./commands/exec.js";
 import { preflight, runInit } from "./commands/init.js";
 import { runLogs } from "./commands/logs.js";
 import { runMolt } from "./commands/molt.js";
+import { runResume } from "./commands/resume.js";
 import { runSnap } from "./commands/snap.js";
 import { runSpawn } from "./commands/spawn.js";
+import { runSuspend } from "./commands/suspend.js";
 import { runTank } from "./commands/tank.js";
 import { runWatch } from "./commands/watch.js";
 import { DEFAULT_CONFIG } from "./config/defaults.js";
@@ -161,6 +163,52 @@ program
     }
 
     process.exit(result.value);
+  });
+
+// ── suspend ──────────────────────────────────────────────────────────────────
+
+program
+  .command("suspend <name>")
+  .description("Suspend a tenant VM to disk (snapshot + kill)")
+  .action(async (name: string) => {
+    console.log(`Suspending tenant "${name}"...`);
+    const result = await runSuspend(name, (p) => {
+      console.log(`  [${p.step}] ${p.detail}`);
+    });
+
+    if (result.isErr()) {
+      console.error(`\n✗ ${result.error.message}`);
+      process.exit(1);
+    }
+
+    const t = result.value;
+    const nextWake = t.suspendInfo?.nextWakeAtMs
+      ? `  Next cron wake: ${new Date(t.suspendInfo.nextWakeAtMs).toISOString()}`
+      : "";
+    console.log(`\nTenant "${t.name}" suspended.${nextWake}`);
+  });
+
+// ── resume ───────────────────────────────────────────────────────────────────
+
+program
+  .command("resume <name>")
+  .description("Resume a suspended tenant VM from snapshot")
+  .action(async (name: string) => {
+    console.log(`Resuming tenant "${name}"...`);
+    const result = await runResume(name, (p) => {
+      console.log(`  [${p.step}] ${p.detail}`);
+    });
+
+    if (result.isErr()) {
+      console.error(`\n✗ ${result.error.message}`);
+      process.exit(1);
+    }
+
+    const t = result.value;
+    console.log(`\nTenant "${t.name}" resumed.`);
+    console.log(
+      `  CID: ${t.cid}  IP: ${t.ipAddress}  Port: ${t.gatewayPort}  PID: ${t.vmPid}`,
+    );
   });
 
 // ── molt ──────────────────────────────────────────────────────────────────────

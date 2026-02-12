@@ -1,5 +1,6 @@
 import { errAsync, okAsync, ResultAsync } from "neverthrow";
 import { loadConfig, loadRegistry, saveRegistry } from "../config/loader.js";
+import { exec } from "../system/exec.js";
 import * as caddy from "../system/caddy.js";
 import * as fc from "../system/firecracker.js";
 import * as image from "../system/image.js";
@@ -46,7 +47,21 @@ export function runEvict(
           .orElse(() => okAsync(undefined));
       })
       .andThen(() => {
+        // Step 1.5: Clean up snapshot files if suspended
+        if (tenant.suspendInfo) {
+          progress("snapshot", "Removing snapshot files");
+          return exec(["rm", "-rf", tenant.suspendInfo.snapshotDir])
+            .map(() => undefined)
+            .orElse(() => okAsync(undefined));
+        }
+        return okAsync(undefined);
+      })
+      .andThen(() => {
         // Step 2: Send CtrlAltDel to VM, then SIGKILL if still alive
+        if (!tenant.vmPid) {
+          progress("vm", "VM not running (suspended), skipping shutdown");
+          return okAsync(undefined);
+        }
         progress("vm", "Shutting down VM");
         return fc
           .sendCtrlAltDel(tenant.socketPath)

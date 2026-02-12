@@ -39,7 +39,23 @@ export function startWatchdog(
         if (!running) {
           break;
         }
-        if (tenant.status !== "active") {
+        if (tenant.status === "removing") {
+          continue;
+        }
+        if (tenant.status === "suspended") {
+          const oldState = (tenantStates[tenant.name] ?? initialWatchState()).state;
+          if (oldState !== "SUSPENDED") {
+            tenantStates[tenant.name] = {
+              ...initialWatchState(),
+              state: "SUSPENDED",
+              lastCheck: new Date().toISOString(),
+            };
+            emitter.emit("state-change", {
+              tenant: tenant.name,
+              from: oldState,
+              to: "SUSPENDED",
+            });
+          }
           continue;
         }
 

@@ -46,6 +46,14 @@ export function addRoute(
       {
         handler: "reverse_proxy",
         upstreams: [{ dial: `${guestIp}:${guestPort}` }],
+        transport: {
+          protocol: "http",
+          dial_timeout: "3s",
+        },
+        load_balancing: {
+          try_duration: "30s",
+          try_interval: "500ms",
+        },
       },
     ],
   };

@@ -128,6 +128,7 @@ export function runSpawn(
         gatewayToken: crypto.randomUUID(),
         jailUid,
         agentToken: crypto.randomUUID(),
+        suspendInfo: null,
       };
 
       // Step 1: Create overlay

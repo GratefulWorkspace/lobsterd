@@ -32,6 +32,19 @@ export async function buildTankEntries(
 ): Promise<TankEntry[]> {
   return Promise.all(
     tenants.map(async (tenant) => {
+      if (tenant.status === "suspended") {
+        return {
+          name: tenant.name,
+          cid: tenant.cid,
+          ip: tenant.ipAddress,
+          port: tenant.gatewayPort,
+          vmPid: "suspended",
+          status: tenant.status,
+          memoryMb: undefined,
+          state: "SUSPENDED" as const,
+        };
+      }
+
       const pidStatus = quickPidCheck(tenant);
       let memoryMb: number | undefined;
 

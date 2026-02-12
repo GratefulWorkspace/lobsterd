@@ -140,3 +140,53 @@ export function sendCtrlAltDel(
     action_type: "SendCtrlAltDel",
   }).map(() => undefined);
 }
+
+export function pauseVm(
+  socketPath: string,
+): ResultAsync<void, LobsterError> {
+  return fcApi(socketPath, "PATCH", "/vm", {
+    state: "Paused",
+  }).map(() => undefined);
+}
+
+export function resumeVm(
+  socketPath: string,
+): ResultAsync<void, LobsterError> {
+  return fcApi(socketPath, "PATCH", "/vm", {
+    state: "Resumed",
+  }).map(() => undefined);
+}
+
+export function createSnapshot(
+  socketPath: string,
+  snapshotPath: string,
+  memFilePath: string,
+): ResultAsync<void, LobsterError> {
+  return fcApi(socketPath, "PUT", "/snapshot/create", {
+    snapshot_type: "Full",
+    snapshot_path: snapshotPath,
+    mem_file_path: memFilePath,
+  })
+    .map(() => undefined)
+    .mapErr((e) => ({
+      ...e,
+      code: "SNAPSHOT_FAILED" as const,
+    }));
+}
+
+export function loadSnapshot(
+  socketPath: string,
+  snapshotPath: string,
+  memFilePath: string,
+): ResultAsync<void, LobsterError> {
+  return fcApi(socketPath, "PUT", "/snapshot/load", {
+    snapshot_path: snapshotPath,
+    mem_file_path: memFilePath,
+    resume_vm: true,
+  })
+    .map(() => undefined)
+    .mapErr((e) => ({
+      ...e,
+      code: "SNAPSHOT_FAILED" as const,
+    }));
+}

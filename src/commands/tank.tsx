@@ -44,6 +44,22 @@ function TankApp({
           break;
         }
 
+        if (tenant.status === "suspended") {
+          setStates((prev) => ({
+            ...prev,
+            [tenant.name]: {
+              ...initialWatchState(),
+              state: "SUSPENDED" as const,
+              lastCheck: new Date().toISOString(),
+            },
+          }));
+          extras[tenant.name] = {
+            ip: tenant.ipAddress,
+            vmPid: "suspended",
+          };
+          continue;
+        }
+
         const result = await runAllChecks(tenant, config);
         if (result.isOk() && !cancelled) {
           setStates((prev) => {
