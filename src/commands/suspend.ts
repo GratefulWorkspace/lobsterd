@@ -137,8 +137,12 @@ export function runSuspend(
           .cleanupChroot(config.jailer.chrootBaseDir, tenant.vmId)
           .map(() => lastRxBytes);
       })
-      .andThen((lastRxBytes) => {
-        // Step 8: Compute next wake time from cron schedules
+      .andThen(() => {
+        // Step 8: Re-read TAP rx_bytes now that the VM is dead,
+        // so the baseline includes trailing TCP teardown / ARP chatter
+        const lastRxBytes = readTapRxBytes(tenant.tapDev);
+
+        // Step 9: Compute next wake time from cron schedules
         const now = Date.now();
         const futureSchedules = cronSchedules.filter(
           (s) => s.nextRunAtMs > now,
@@ -149,7 +153,7 @@ export function runSuspend(
           nextWakeAtMs = earliest - config.watchdog.cronWakeAheadMs;
         }
 
-        // Step 9: Update registry
+        // Step 10: Update registry
         progress("registry", "Updating registry");
         const suspendInfo: SuspendInfo = {
           suspendedAt: new Date().toISOString(),

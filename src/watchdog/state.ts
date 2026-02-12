@@ -82,6 +82,16 @@ export function transition(
       }
       return { next: { ...base, state: "FAILED" }, needsRepair: false };
 
+    case "SUSPENDED":
+      // After resume, health checks run again — transition based on results
+      if (allOk) {
+        return {
+          next: { ...base, state: "HEALTHY", repairAttempts: 0 },
+          needsRepair: false,
+        };
+      }
+      return { next: { ...base, state: "DEGRADED" }, needsRepair: true };
+
     default:
       return { next: base, needsRepair: false };
   }
