@@ -32,7 +32,7 @@ export const DEFAULT_CONFIG: LobsterdConfig = {
     kernelPath: `${KERNELS_DIR}/vmlinux`,
     rootfsPath: `${LOBSTERD_BASE}/rootfs.ext4`,
     defaultVcpuCount: 2,
-    defaultMemSizeMb: 512,
+    defaultMemSizeMb: 1024,
     networkRxRateLimit: {
       bandwidth: { size: 1_250_000, refillTime: 1000 },
       ops: { size: 1_000, refillTime: 1000 },

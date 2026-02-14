@@ -125,7 +125,7 @@ from unprivileged host users to the guest control plane.
 ## Architecture
 
 Each tenant gets:
-- A Firecracker microVM (2 vCPU, 512MB RAM by default)
+- A Firecracker microVM (2 vCPU, 1024MB RAM by default)
 - A /30 subnet with a dedicated TAP device and iptables NAT
 - An overlay ext4 filesystem layered on top of the shared read-only rootfs
 - A lobster-agent (TCP on port 52/53) for host-to-guest communication
