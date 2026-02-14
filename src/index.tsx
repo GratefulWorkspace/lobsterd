@@ -2,6 +2,7 @@
 import { Command } from "commander";
 import { render } from "ink";
 import { runEvict } from "./commands/evict.js";
+import { runExec } from "./commands/exec.js";
 import { preflight, runInit } from "./commands/init.js";
 import { runLogs } from "./commands/logs.js";
 import { runMolt } from "./commands/molt.js";
@@ -166,6 +167,23 @@ program
     }
 
     console.log(`\nTenant "${name}" evicted.`);
+  });
+
+// ── exec ─────────────────────────────────────────────────────────────────────
+
+program
+  .command("exec <name> [command...]")
+  .description("Run a command inside a tenant VM via SSH")
+  .passThroughOptions()
+  .action(async (name: string, command: string[]) => {
+    const result = await runExec(name, command);
+
+    if (result.isErr()) {
+      console.error(`\n✗ ${result.error.message}`);
+      process.exit(1);
+    }
+
+    process.exit(result.value);
   });
 
 // ── molt ──────────────────────────────────────────────────────────────────────
