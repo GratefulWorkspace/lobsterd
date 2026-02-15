@@ -213,8 +213,8 @@ snapshot in ~3 seconds, transparently to connected clients.
 
 **Idle detection** — The watchdog scheduler polls each tenant's guest agent for
 active connections (both inbound and outbound). When a tenant has zero
-connections for longer than `idleThresholdMs` (default 45 seconds), it is
-automatically suspended.
+connections and no running cron jobs for longer than `idleThresholdMs` (default
+10 seconds), it is automatically suspended.
 
 **Wake-on-request** — While a VM is suspended, a lightweight TCP sentinel binds
 the guest IP on the host loopback and listens on the gateway port. When Caddy's
@@ -225,7 +225,7 @@ total latency).
 
 **Cron-aware scheduling** — Before suspending, the scheduler queries the guest
 agent for cron job schedules and computes the next required wake time. A timer
-resumes the VM ahead of the next scheduled job (`cronWakeAheadMs`, default 60s).
+resumes the VM ahead of the next scheduled job (`cronWakeAheadMs`, default 15s).
 
 Manual suspend and resume are also available via `lobsterd suspend <name>` and
 `lobsterd resume <name>`. The watchdog automatically detects externally-suspended

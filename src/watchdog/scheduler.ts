@@ -271,7 +271,7 @@ export function startScheduler(
       }
       // connections === -1 means agent unreachable, don't change idle tracking
     }
-  }, config.watchdog.intervalMs);
+  }, config.watchdog.trafficPollMs);
 
   // ── Initialize sentinels + cron timers for already-suspended tenants ────
   (async () => {
