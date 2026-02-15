@@ -43,12 +43,6 @@ export const TankEntrySchema = z
 export const SpawnRequestBody = z
   .object({
     name: z.string().regex(TENANT_NAME_REGEX),
-    apiKey: z.string().optional(),
-    baseUrl: z.string().optional(),
-    model: z.string().optional(),
-    modelName: z.string().optional(),
-    contextWindow: z.number().int().optional(),
-    maxTokens: z.number().int().optional(),
   })
   .openapi("SpawnRequest");
 

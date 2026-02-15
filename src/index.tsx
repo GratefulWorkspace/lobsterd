@@ -12,11 +12,9 @@ import { runTank } from "./commands/tank.js";
 import { runWatch } from "./commands/watch.js";
 import { DEFAULT_CONFIG } from "./config/defaults.js";
 import { loadConfig, loadRegistry } from "./config/loader.js";
-import { buildProviderConfig, PROVIDER_DEFAULTS } from "./config/models.js";
 import { startBuoy } from "./reef/index.js";
 import { InitFlow } from "./ui/InitFlow.js";
 import { MoltResults } from "./ui/MoltProgress.js";
-import { SpawnFlow } from "./ui/SpawnFlow.js";
 
 const program = new Command();
 
@@ -79,61 +77,23 @@ program
 program
   .command("spawn <name>")
   .description("Add a new tenant (Firecracker microVM)")
-  .option("-k, --api-key <key>", "API key for the model provider")
-  .option("--base-url <url>", "OpenAI-compatible base URL")
-  .option("--model <id>", "Model identifier at the provider")
-  .option("--model-name <name>", "Human-readable model display name")
-  .option("--context-window <n>", "Max input tokens", Number.parseInt)
-  .option("--max-tokens <n>", "Max output tokens per response", Number.parseInt)
-  .action(
-    async (
-      name: string,
-      opts: {
-        apiKey?: string;
-        baseUrl?: string;
-        model?: string;
-        modelName?: string;
-        contextWindow?: number;
-        maxTokens?: number;
-      },
-    ) => {
-      // Non-interactive mode: --api-key provided
-      if (opts.apiKey) {
-        const override = buildProviderConfig({
-          baseUrl: opts.baseUrl ?? PROVIDER_DEFAULTS.baseUrl,
-          model: opts.model ?? PROVIDER_DEFAULTS.model,
-          modelName: opts.modelName ?? PROVIDER_DEFAULTS.modelName,
-          contextWindow: opts.contextWindow ?? PROVIDER_DEFAULTS.contextWindow,
-          maxTokens: opts.maxTokens ?? PROVIDER_DEFAULTS.maxTokens,
-          apiKey: opts.apiKey,
-        });
-        console.log(`Spawning tenant "${name}"...`);
-        const result = await runSpawn(
-          name,
-          (p) => {
-            console.log(`  [${p.step}] ${p.detail}`);
-          },
-          { openclawOverride: override },
-        );
+  .action(async (name: string) => {
+    console.log(`Spawning tenant "${name}"...`);
+    const result = await runSpawn(name, (p) => {
+      console.log(`  [${p.step}] ${p.detail}`);
+    });
 
-        if (result.isErr()) {
-          console.error(`\n✗ ${result.error.message}`);
-          process.exit(1);
-        }
+    if (result.isErr()) {
+      console.error(`\n✗ ${result.error.message}`);
+      process.exit(1);
+    }
 
-        const t = result.value;
-        console.log(`\nTenant "${t.name}" spawned successfully.`);
-        console.log(
-          `  CID: ${t.cid}  IP: ${t.ipAddress}  Port: ${t.gatewayPort}  PID: ${t.vmPid}`,
-        );
-        return;
-      }
-
-      // Interactive mode: no --api-key
-      const { waitUntilExit } = render(<SpawnFlow name={name} />);
-      await waitUntilExit();
-    },
-  );
+    const t = result.value;
+    console.log(`\nTenant "${t.name}" spawned successfully.`);
+    console.log(
+      `  CID: ${t.cid}  IP: ${t.ipAddress}  Port: ${t.gatewayPort}  PID: ${t.vmPid}`,
+    );
+  });
 
 // ── evict ─────────────────────────────────────────────────────────────────────
 

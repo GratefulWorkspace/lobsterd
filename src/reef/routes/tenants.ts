@@ -4,7 +4,6 @@ import { runEvict } from "../../commands/evict.js";
 import { runSpawn } from "../../commands/spawn.js";
 import { buildTankEntries } from "../../commands/tank-data.js";
 import { loadConfig, loadRegistry } from "../../config/loader.js";
-import { buildProviderConfig, PROVIDER_DEFAULTS } from "../../config/models.js";
 import { errorToStatus, stripSecrets } from "../errors.js";
 import {
   ErrorResponse,
@@ -118,19 +117,7 @@ export function registerTenantRoutes(app: OpenAPIHono) {
   app.openapi(spawnTenantRoute, async (c) => {
     const body = c.req.valid("json");
 
-    const options: { openclawOverride?: Record<string, unknown> } = {};
-    if (body.apiKey) {
-      options.openclawOverride = buildProviderConfig({
-        baseUrl: body.baseUrl ?? PROVIDER_DEFAULTS.baseUrl,
-        model: body.model ?? PROVIDER_DEFAULTS.model,
-        modelName: body.modelName ?? PROVIDER_DEFAULTS.modelName,
-        contextWindow: body.contextWindow ?? PROVIDER_DEFAULTS.contextWindow,
-        maxTokens: body.maxTokens ?? PROVIDER_DEFAULTS.maxTokens,
-        apiKey: body.apiKey,
-      });
-    }
-
-    const result = await runSpawn(body.name, undefined, options);
+    const result = await runSpawn(body.name);
     if (result.isErr()) {
       const status = errorToStatus(result.error) as 409 | 422 | 500;
       return c.json(stripSecrets(result.error), status);
