@@ -75,21 +75,14 @@ INITTAB
 sed -i 's/^root:.*/root::0:0:root:\/root:\/bin\/sh/' "$MOUNT_DIR/etc/passwd"
 
 echo "==> Configuring shell environment"
-mkdir -p "$MOUNT_DIR/etc/profile.d"
-cat > "$MOUNT_DIR/etc/profile.d/lobsterd.sh" <<'PROFILE'
-export PATH="/usr/local/bin:$PATH"
-alias openclaw="bun /opt/openclaw/openclaw.mjs"
-PROFILE
-
-# Ensure non-interactive SSH commands also get /usr/local/bin
-cat > "$MOUNT_DIR/root/.bashrc" <<'BASHRC'
-export PATH="/usr/local/bin:$PATH"
-BASHRC
-# Dropbear uses /bin/sh (busybox ash) which reads ENV on startup
-echo 'export ENV="/root/.ashrc"' >> "$MOUNT_DIR/root/.profile"
-cat > "$MOUNT_DIR/root/.ashrc" <<'ASHRC'
-export PATH="/usr/local/bin:$PATH"
-ASHRC
+# Symlink bun into default PATH so it works in non-interactive SSH sessions
+ln -sf /usr/local/bin/bun "$MOUNT_DIR/usr/bin/bun"
+# Create openclaw wrapper in default PATH
+cat > "$MOUNT_DIR/usr/bin/openclaw" <<'WRAPPER'
+#!/bin/sh
+exec /usr/local/bin/bun /opt/openclaw/openclaw.mjs "$@"
+WRAPPER
+chmod 0755 "$MOUNT_DIR/usr/bin/openclaw"
 
 echo "==> Installing overlay-init"
 install -m 0755 "$SCRIPT_DIR/overlay-init" "$MOUNT_DIR/sbin/overlay-init"
