@@ -187,6 +187,22 @@ program
     process.exit(result.value);
   });
 
+// ── configure ────────────────────────────────────────────────────────────────
+
+program
+  .command("configure <name>")
+  .description("Open the OpenClaw configuration TUI inside a tenant VM")
+  .action(async (name: string) => {
+    const result = await runExec(name, ["openclaw", "configure"]);
+
+    if (result.isErr()) {
+      console.error(`\n✗ ${result.error.message}`);
+      process.exit(1);
+    }
+
+    process.exit(result.value);
+  });
+
 // ── molt ──────────────────────────────────────────────────────────────────────
 
 program
