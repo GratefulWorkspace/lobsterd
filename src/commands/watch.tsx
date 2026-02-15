@@ -87,6 +87,16 @@ export async function runWatch(
       console.log(`[${data.timestamp}] tick: ${states}`);
     });
 
+    handle.emitter.on("scheduler-poll", (data) => {
+      const idle =
+        data.idleFor !== null
+          ? ` idle=${(data.idleFor / 1000).toFixed(1)}s`
+          : "";
+      console.log(
+        `[${new Date().toISOString()}] ${data.tenant}: conn=${data.connections}${idle}`,
+      );
+    });
+
     handle.emitter.on("suspend-start", (data) => {
       console.log(`[${new Date().toISOString()}] ${data.tenant}: suspending`);
     });

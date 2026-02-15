@@ -264,6 +264,11 @@ export interface WatchdogEvents {
     timestamp: string;
     states: Record<string, TenantWatchState>;
   };
+  "scheduler-poll": {
+    tenant: string;
+    connections: number;
+    idleFor: number | null;
+  };
   "suspend-start": { tenant: string };
   "suspend-complete": { tenant: string; nextWakeAtMs: number | null };
   "suspend-failed": { tenant: string; error: string };

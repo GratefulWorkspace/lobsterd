@@ -263,11 +263,23 @@ export function startScheduler(
           idleSince.set(tenant.name, now);
         }
         const elapsed = now - (idleSince.get(tenant.name) ?? now);
+        emitter.emit("scheduler-poll", {
+          tenant: tenant.name,
+          connections,
+          idleFor: elapsed,
+        });
         if (elapsed >= config.watchdog.idleThresholdMs) {
           triggerSuspend(tenant.name);
         }
-      } else if (connections > 0) {
-        idleSince.delete(tenant.name);
+      } else {
+        emitter.emit("scheduler-poll", {
+          tenant: tenant.name,
+          connections,
+          idleFor: null,
+        });
+        if (connections > 0) {
+          idleSince.delete(tenant.name);
+        }
       }
       // connections === -1 means agent unreachable, don't change idle tracking
     }
