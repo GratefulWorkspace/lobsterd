@@ -75,6 +75,7 @@ export function runSuspend(
           )
           .map((schedules) => {
             cronSchedules = schedules;
+            return undefined;
           })
           .orElse(() => okAsync(undefined));
       })

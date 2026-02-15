@@ -24,6 +24,7 @@ export function runResume(
 
   let config: LobsterdConfig;
   let tenant: Tenant;
+  let snapshotDir: string;
   let registry: TenantRegistry;
   let vmProcPid: number | null = null;
 
@@ -47,6 +48,7 @@ export function runResume(
         });
       }
       tenant = found;
+      snapshotDir = found.suspendInfo.snapshotDir;
       registry = reg;
       return okAsync(undefined);
     })
@@ -104,7 +106,6 @@ export function runResume(
         config.jailer.chrootBaseDir,
         tenant.vmId,
       );
-      const snapshotDir = tenant.suspendInfo!.snapshotDir;
       return exec([
         "cp",
         "--sparse=always",
@@ -136,7 +137,6 @@ export function runResume(
     .andThen(() => {
       // Step 6: Clean up snapshot files from persistent storage
       progress("cleanup", "Removing snapshot from persistent storage");
-      const snapshotDir = tenant.suspendInfo!.snapshotDir;
       return exec(["rm", "-rf", snapshotDir]).orElse(() =>
         okAsync({ exitCode: 0, stdout: "", stderr: "" }),
       );

@@ -99,7 +99,9 @@ export function startScheduler(
   }
 
   async function startSentinelForTenant(tenant: Tenant) {
-    if (sentinels.has(tenant.name)) return;
+    if (sentinels.has(tenant.name)) {
+      return;
+    }
     const sentinel = await startSentinel(tenant, () => {
       triggerResume(tenant.name, "traffic");
     });
@@ -107,7 +109,9 @@ export function startScheduler(
   }
 
   function scheduleCronWake(tenant: Tenant) {
-    if (!tenant.suspendInfo?.nextWakeAtMs) return;
+    if (!tenant.suspendInfo?.nextWakeAtMs) {
+      return;
+    }
     clearCronTimer(tenant.name);
 
     const delay = tenant.suspendInfo.nextWakeAtMs - Date.now();
@@ -130,7 +134,9 @@ export function startScheduler(
     name: string,
     trigger: "traffic" | "cron" | "manual",
   ) {
-    if (!running || inFlight.has(name)) return;
+    if (!running || inFlight.has(name)) {
+      return;
+    }
     inFlight.add(name);
 
     // Keep status as "suspended" during resume so the watchdog skips
@@ -168,7 +174,9 @@ export function startScheduler(
   }
 
   async function triggerSuspend(name: string) {
-    if (!running || inFlight.has(name)) return;
+    if (!running || inFlight.has(name)) {
+      return;
+    }
     inFlight.add(name);
 
     // Mark suspended in-memory immediately so the watchdog skips health
@@ -210,7 +218,9 @@ export function startScheduler(
 
   // ── Idle detection (auto-suspend) ────────────────────────────────────────
   const idleInterval = setInterval(async () => {
-    if (!running) return;
+    if (!running) {
+      return;
+    }
     for (const tenant of registry.tenants) {
       if (tenant.status === "suspended") {
         // Ensure sentinel exists for suspended tenants (covers manual suspend)
@@ -224,7 +234,9 @@ export function startScheduler(
         idleSince.delete(tenant.name);
         continue;
       }
-      if (inFlight.has(tenant.name)) continue;
+      if (inFlight.has(tenant.name)) {
+        continue;
+      }
 
       const connResult = await vsock.getActiveConnections(
         tenant.ipAddress,
@@ -238,7 +250,7 @@ export function startScheduler(
         if (!idleSince.has(tenant.name)) {
           idleSince.set(tenant.name, now);
         }
-        const idleMs = now - idleSince.get(tenant.name)!;
+        const idleMs = now - (idleSince.get(tenant.name) ?? now);
         if (idleMs >= config.watchdog.idleThresholdMs) {
           triggerSuspend(tenant.name);
         }
