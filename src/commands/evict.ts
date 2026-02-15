@@ -5,6 +5,7 @@ import * as fc from "../system/firecracker.js";
 import * as image from "../system/image.js";
 import * as jailer from "../system/jailer.js";
 import * as network from "../system/network.js";
+import * as ssh from "../system/ssh.js";
 import type { LobsterError, Tenant, TenantRegistry } from "../types/index.js";
 
 export interface EvictProgress {
@@ -116,6 +117,11 @@ export function runEvict(
         return image
           .deleteOverlay(tenant.overlayPath)
           .orElse(() => okAsync(undefined));
+      })
+      .andThen(() => {
+        // Step 6b: Remove SSH keypair
+        progress("ssh", "Removing SSH keypair");
+        return ssh.removeKeypair(tenant.name);
       })
       .andThen(() => {
         // Step 7: Remove from registry

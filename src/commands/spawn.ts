@@ -6,6 +6,7 @@ import * as fc from "../system/firecracker.js";
 import * as image from "../system/image.js";
 import * as jailer from "../system/jailer.js";
 import * as network from "../system/network.js";
+import * as ssh from "../system/ssh.js";
 import * as vsock from "../system/vsock.js";
 import type {
   LobsterdConfig,
@@ -17,10 +18,6 @@ import type {
 export interface SpawnProgress {
   step: string;
   detail: string;
-}
-
-export interface SpawnOptions {
-  openclawOverride?: Record<string, unknown>;
 }
 
 type UndoFn = () => ResultAsync<void, LobsterError>;
@@ -44,7 +41,6 @@ function computeSubnetIps(
 export function runSpawn(
   name: string,
   onProgress?: (p: SpawnProgress) => void,
-  options?: SpawnOptions,
 ): ResultAsync<Tenant, LobsterError> {
   const progress = (step: string, detail: string) =>
     onProgress?.({ step, detail });
@@ -330,13 +326,17 @@ export function runSpawn(
       );
     })
     .andThen(() => {
-      // Step 9: Inject secrets (build per-tenant config with correct origin)
+      // Step 9: Generate SSH keypair for tenant
+      progress("ssh-keygen", "Generating SSH keypair");
+      return ssh.generateKeypair(tenant.name);
+    })
+    .andThen((sshPublicKey) => {
+      undoStack.push(() => ssh.removeKeypair(tenant.name));
+
+      // Step 10: Inject secrets (build per-tenant config with correct origin)
       progress("secrets", "Injecting API keys and gateway token");
       const tenantOrigin = `https://${name}.${config.caddy.domain}`;
       const tenantConfig = structuredClone(config.openclaw.defaultConfig);
-      if (options?.openclawOverride) {
-        Object.assign(tenantConfig, options.openclawOverride);
-      }
       const origins = tenantConfig.gateway?.controlUi?.allowedOrigins ?? [];
       if (!origins.includes(tenantOrigin)) {
         origins.push(tenantOrigin);
@@ -350,6 +350,7 @@ export function runSpawn(
         {
           OPENCLAW_GATEWAY_TOKEN: tenant.gatewayToken,
           OPENCLAW_CONFIG: JSON.stringify(tenantConfig),
+          SSH_AUTHORIZED_KEY: sshPublicKey,
         },
         tenant.agentToken,
       );

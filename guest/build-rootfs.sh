@@ -48,7 +48,7 @@ echo "==> Installing packages inside chroot"
 chroot "$MOUNT_DIR" /bin/sh -c '
   set -e
   apk update
-  apk add alpine-base openrc git curl unzip libstdc++ libgcc
+  apk add alpine-base openrc git curl unzip libstdc++ libgcc dropbear
 '
 
 echo "==> Installing Bun (musl build)"
@@ -74,6 +74,16 @@ INITTAB
 # Password-less root
 sed -i 's/^root:.*/root::0:0:root:\/root:\/bin\/sh/' "$MOUNT_DIR/etc/passwd"
 
+echo "==> Configuring shell environment"
+# Symlink bun into default PATH so it works in non-interactive SSH sessions
+ln -sf /usr/local/bin/bun "$MOUNT_DIR/usr/bin/bun"
+# Create openclaw wrapper in default PATH
+cat > "$MOUNT_DIR/usr/bin/openclaw" <<'WRAPPER'
+#!/bin/sh
+exec /usr/local/bin/bun /opt/openclaw/openclaw.mjs "$@"
+WRAPPER
+chmod 0755 "$MOUNT_DIR/usr/bin/openclaw"
+
 echo "==> Installing overlay-init"
 install -m 0755 "$SCRIPT_DIR/overlay-init" "$MOUNT_DIR/sbin/overlay-init"
 
@@ -95,6 +105,47 @@ depend() {
 SVC
 chmod 0755 "$MOUNT_DIR/etc/init.d/lobster-agent"
 ln -sf /etc/init.d/lobster-agent "$MOUNT_DIR/etc/runlevels/default/lobster-agent"
+
+echo "==> Installing dropbear SSH server"
+mkdir -p "$MOUNT_DIR/etc/dropbear"
+mkdir -p -m 0700 "$MOUNT_DIR/root/.ssh"
+
+cat > "$MOUNT_DIR/etc/init.d/dropbear" <<'SVC'
+#!/sbin/openrc-run
+name="dropbear"
+description="Lightweight SSH server"
+command="/usr/sbin/dropbear"
+pidfile="/run/${RC_SVCNAME}.pid"
+
+depend() {
+  need net
+}
+
+start_pre() {
+  # Generate host key on first boot (persisted in overlay)
+  if [ ! -f /etc/dropbear/dropbear_ed25519_host_key ]; then
+    dropbearkey -t ed25519 -f /etc/dropbear/dropbear_ed25519_host_key
+  fi
+}
+
+start() {
+  # Parse guest IP from kernel cmdline (ip=<client>::<gw>:<mask>::<dev>:off)
+  local ip_param guest_ip
+  ip_param=$(cat /proc/cmdline | tr ' ' '\n' | grep '^ip=' | head -1 | cut -d= -f2)
+  guest_ip=$(echo "$ip_param" | cut -d: -f1)
+  if [ -z "$guest_ip" ]; then
+    guest_ip="0.0.0.0"
+  fi
+
+  ebegin "Starting ${name}"
+  start-stop-daemon --start --pidfile "$pidfile" \
+    --exec "$command" -- \
+    -s -j -k -p "${guest_ip}:22" -P "$pidfile"
+  eend $?
+}
+SVC
+chmod 0755 "$MOUNT_DIR/etc/init.d/dropbear"
+ln -sf /etc/init.d/dropbear "$MOUNT_DIR/etc/runlevels/default/dropbear"
 
 echo "==> Installing OpenClaw (pre-built from npm)"
 OPENCLAW_TMP="$(mktemp -d)"
@@ -120,6 +171,7 @@ chroot "$MOUNT_DIR" /bin/sh -c '
   rm -f /sbin/apk /usr/bin/apk
   rm -rf /etc/apk /var/cache/apk /lib/apk
 '
+# Note: dropbear is intentionally kept — provides SSH access for `lobsterd exec`
 # Remove curl, git, unzip (only needed during build, not at runtime)
 rm -f "$MOUNT_DIR/usr/bin/curl" "$MOUNT_DIR/usr/bin/git" "$MOUNT_DIR/usr/bin/unzip"
 rm -rf "$MOUNT_DIR/usr/libexec/git-core"

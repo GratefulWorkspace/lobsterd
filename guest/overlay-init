@@ -49,6 +49,8 @@ pivot_root . mnt/old-root
 mount -t proc proc /proc 2>/dev/null || true
 mount -t sysfs sysfs /sys
 mount -t devtmpfs devtmpfs /dev 2>/dev/null || true
+mkdir -p /dev/pts
+mount -t devpts devpts /dev/pts
 
 # Network is already configured by kernel ip= parameter; no need for
 # overlay-init to re-configure it since the interface persists across

@@ -6,7 +6,13 @@
 
 import { spawn } from "node:child_process";
 import { timingSafeEqual } from "node:crypto";
-import { mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { createServer } from "node:net";
 
 const VSOCK_PORT = 52;
@@ -172,6 +178,22 @@ function handleInjectSecrets(newSecrets) {
       console.log("[lobster-agent] Wrote OpenClaw config");
     } catch (e) {
       console.error(`[lobster-agent] Failed to write config: ${e.message}`);
+    }
+  }
+
+  // Write SSH authorized key if provided
+  if (newSecrets.SSH_AUTHORIZED_KEY) {
+    try {
+      mkdirSync("/root/.ssh", { recursive: true });
+      chmodSync("/root/.ssh", 0o700);
+      writeFileSync(
+        "/root/.ssh/authorized_keys",
+        `${newSecrets.SSH_AUTHORIZED_KEY}\n`,
+        { mode: 0o600 },
+      );
+      console.log("[lobster-agent] Wrote SSH authorized key");
+    } catch (e) {
+      console.error(`[lobster-agent] Failed to write SSH key: ${e.message}`);
     }
   }
 
