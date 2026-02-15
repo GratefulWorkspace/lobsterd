@@ -203,6 +203,16 @@ export function startScheduler(
         scheduleCronWake(registry.tenants[idx]);
       }
       idleSince.delete(name);
+    } else if (result.error.code === "SUSPEND_SKIPPED") {
+      // Cron wake too close — revert to active and reset idle tracking
+      if (idx !== -1) {
+        registry.tenants[idx].status = "active";
+      }
+      idleSince.delete(name);
+      emitter.emit("suspend-skipped", {
+        tenant: name,
+        reason: result.error.message,
+      });
     } else {
       // Revert in-memory status on failure
       if (idx !== -1) {

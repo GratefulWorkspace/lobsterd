@@ -99,6 +99,17 @@ export const cronScheduleInfoSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   nextRunAtMs: z.number().int().min(0),
+  schedule: z
+    .object({
+      kind: z.enum(["cron", "every", "at"]),
+      expr: z.string().optional(),
+      tz: z.string().optional(),
+      everyMs: z.number().optional(),
+      anchorMs: z.number().optional(),
+      at: z.string().optional(),
+    })
+    .nullable()
+    .optional(),
 });
 
 export const suspendInfoSchema = z.object({

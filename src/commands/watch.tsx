@@ -106,6 +106,12 @@ export async function runWatch(
       );
     });
 
+    handle.emitter.on("suspend-skipped", (data) => {
+      console.log(
+        `[${new Date().toISOString()}] ${data.tenant}: suspend skipped: ${data.reason}`,
+      );
+    });
+
     handle.emitter.on("resume-start", (data) => {
       console.log(
         `[${new Date().toISOString()}] ${data.tenant}: resuming (trigger: ${data.trigger})`,

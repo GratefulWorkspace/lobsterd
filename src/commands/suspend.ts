@@ -79,6 +79,27 @@ export function runSuspend(
           })
           .orElse(() => okAsync(undefined));
       })
+      .andThen((): ResultAsync<void, LobsterError> => {
+        // Step 1b: Early bail if next wake would be in the past
+        const now = Date.now();
+        const nextRunTimes: number[] = [];
+        for (const s of cronSchedules) {
+          if (s.nextRunAtMs > now) {
+            nextRunTimes.push(s.nextRunAtMs);
+          }
+        }
+        if (nextRunTimes.length > 0) {
+          const earliest = Math.min(...nextRunTimes);
+          const nextWakeAtMs = earliest - config.watchdog.cronWakeAheadMs;
+          if (nextWakeAtMs <= now) {
+            return errAsync({
+              code: "SUSPEND_SKIPPED",
+              message: `Next cron wake is ${Math.round((earliest - now) / 1000)}s away (within ${config.watchdog.cronWakeAheadMs / 1000}s wake-ahead window), skipping suspend`,
+            });
+          }
+        }
+        return okAsync(undefined);
+      })
       .andThen(() => {
         // Step 2: Record TAP rx_bytes
         progress("tap", "Recording TAP rx_bytes counter");
@@ -144,23 +165,14 @@ export function runSuspend(
         const lastRxBytes = readTapRxBytes(tenant.tapDev);
 
         // Step 9: Compute next wake time from cron schedules
+        // (We already validated in step 1b that this won't be in the past)
         const now = Date.now();
-        const nextRunTimes: number[] = [];
-        for (const s of cronSchedules) {
-          if (s.nextRunAtMs > now) {
-            nextRunTimes.push(s.nextRunAtMs);
-          } else if (s.schedule?.kind === "every" && s.schedule.everyMs) {
-            // nextRunAtMs is stale (job ran but schedule file wasn't updated yet).
-            // Advance by everyMs intervals until we find the next future run.
-            const interval = s.schedule.everyMs;
-            const elapsed = now - s.nextRunAtMs;
-            const steps = Math.ceil(elapsed / interval);
-            nextRunTimes.push(s.nextRunAtMs + steps * interval);
-          }
-        }
         let nextWakeAtMs: number | null = null;
-        if (nextRunTimes.length > 0) {
-          const earliest = Math.min(...nextRunTimes);
+        const futureRuns = cronSchedules
+          .map((s) => s.nextRunAtMs)
+          .filter((t) => t > now);
+        if (futureRuns.length > 0) {
+          const earliest = Math.min(...futureRuns);
           nextWakeAtMs = earliest - config.watchdog.cronWakeAheadMs;
         }
 

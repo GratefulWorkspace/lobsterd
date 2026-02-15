@@ -242,6 +242,7 @@ export type ErrorCode =
   | "BUOY_ALREADY_RUNNING"
   | "SNAPSHOT_FAILED"
   | "SUSPEND_FAILED"
+  | "SUSPEND_SKIPPED"
   | "RESUME_FAILED"
   | "UNINIT_FAILED"
   | "UNKNOWN";
@@ -266,6 +267,7 @@ export interface WatchdogEvents {
   "suspend-start": { tenant: string };
   "suspend-complete": { tenant: string; nextWakeAtMs: number | null };
   "suspend-failed": { tenant: string; error: string };
+  "suspend-skipped": { tenant: string; reason: string };
   "resume-start": { tenant: string; trigger: "traffic" | "cron" | "manual" };
   "resume-complete": { tenant: string; vmPid: number | null };
   "resume-failed": { tenant: string; error: string };
