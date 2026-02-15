@@ -38,7 +38,7 @@ export function runExec(
       "ConnectTimeout=10",
     ];
 
-    if (!command || command.length === 0) {
+    if (process.stdin.isTTY) {
       sshArgs.push("-t");
     }
 
