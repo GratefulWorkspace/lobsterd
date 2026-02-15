@@ -125,6 +125,11 @@ export interface WatchdogConfig {
 
 export interface OpenclawDefaultConfig {
   gateway?: {
+    auth?: {
+      mode?: string;
+      token?: string;
+      [key: string]: unknown;
+    };
     controlUi?: {
       allowedOrigins?: string[];
       [key: string]: unknown;

@@ -344,6 +344,10 @@ export function runSpawn(
       if (tenantConfig.gateway?.controlUi) {
         tenantConfig.gateway.controlUi.allowedOrigins = origins;
       }
+      // Include gateway token in config so CLI tools (SSH sessions) can auth
+      if (tenantConfig.gateway?.auth) {
+        tenantConfig.gateway.auth.token = tenant.gatewayToken;
+      }
       return vsock.injectSecrets(
         tenant.ipAddress,
         config.vsock.agentPort,

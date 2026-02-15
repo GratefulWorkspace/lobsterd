@@ -77,12 +77,9 @@ export const DEFAULT_CONFIG: LobsterdConfig = {
       gateway: {
         mode: "local",
         bind: "custom",
+        port: 9000,
         auth: {
           mode: "token",
-        },
-        controlUi: {
-          allowedOrigins: ["http://localhost:5173"],
-          dangerouslyDisableDeviceAuth: true,
         },
       },
     },
