@@ -202,6 +202,32 @@ export function getActiveConnections(
   );
 }
 
+export function setGuestTime(
+  guestIp: string,
+  port: number,
+  agentToken: string,
+): ResultAsync<void, LobsterError> {
+  const payload = JSON.stringify({
+    type: "set-time",
+    token: agentToken,
+    timestampMs: Date.now(),
+  });
+  return ResultAsync.fromPromise(
+    (async () => {
+      const response = await tcpSend(guestIp, port, `${payload}\n`, 3000);
+      const data = JSON.parse(response.trim());
+      if (!data.ok) {
+        throw new Error(data.error ?? "set-time rejected");
+      }
+    })(),
+    (e) => ({
+      code: "VSOCK_CONNECT_FAILED" as const,
+      message: `Failed to set guest time: ${e instanceof Error ? e.message : String(e)}`,
+      cause: e,
+    }),
+  );
+}
+
 export function getLogs(
   guestIp: string,
   port: number,

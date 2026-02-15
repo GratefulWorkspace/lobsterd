@@ -4,7 +4,7 @@
 // Listens on TCP for host commands: inject-secrets, health-ping, launch-openclaw, shutdown
 // Authenticated via agent_token passed in kernel command line.
 
-import { spawn } from "node:child_process";
+import { execSync, spawn } from "node:child_process";
 import { timingSafeEqual } from "node:crypto";
 import {
   chmodSync,
@@ -164,6 +164,8 @@ async function handleMessage(msg) {
       } catch {
         return "No logs available";
       }
+    case "set-time":
+      return handleSetTime(msg.timestampMs);
     case "get-cron-schedules":
       return await handleGetCronSchedules();
     case "get-active-connections":
@@ -172,6 +174,22 @@ async function handleMessage(msg) {
       return handleShutdown();
     default:
       return JSON.stringify({ error: `Unknown message type: ${msg.type}` });
+  }
+}
+
+function handleSetTime(timestampMs) {
+  if (typeof timestampMs !== "number" || timestampMs <= 0) {
+    return JSON.stringify({ error: "Invalid timestampMs" });
+  }
+  try {
+    const epochSeconds = Math.floor(timestampMs / 1000);
+    execSync(`date -s @${epochSeconds}`, { stdio: "pipe" });
+    console.log(
+      `[lobster-agent] Clock set to ${new Date(timestampMs).toISOString()}`,
+    );
+    return JSON.stringify({ ok: true });
+  } catch (e) {
+    return JSON.stringify({ error: `Failed to set time: ${e.message}` });
   }
 }
 

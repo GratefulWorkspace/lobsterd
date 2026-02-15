@@ -3,6 +3,7 @@ import { loadConfig, loadRegistry, saveRegistry } from "../config/loader.js";
 import { exec } from "../system/exec.js";
 import * as fc from "../system/firecracker.js";
 import * as jailer from "../system/jailer.js";
+import * as vsock from "../system/vsock.js";
 import type {
   LobsterdConfig,
   LobsterError,
@@ -133,6 +134,21 @@ export function runResume(
       // Step 5: Load snapshot (VM resumes instantly)
       progress("resume", "Loading snapshot and resuming VM");
       return fc.loadSnapshot(tenant.socketPath, "/snapshot_file", "/mem_file");
+    })
+    .andThen(() => {
+      // Step 5.5: Sync guest clock (stale after snapshot restore)
+      progress("time-sync", "Syncing guest clock");
+      return vsock
+        .setGuestTime(tenant.ipAddress, 52, tenant.agentToken)
+        .orElse(() => okAsync(undefined));
+    })
+    .andThen(() => {
+      // Step 5.6: Refresh cron schedules against corrected clock
+      progress("cron-refresh", "Refreshing cron schedules");
+      return vsock
+        .getCronSchedules(tenant.ipAddress, 52, tenant.agentToken)
+        .map(() => undefined)
+        .orElse(() => okAsync(undefined));
     })
     .andThen(() => {
       // Step 6: Clean up snapshot files from persistent storage
