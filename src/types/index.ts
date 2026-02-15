@@ -233,6 +233,7 @@ export type ErrorCode =
   | "SNAPSHOT_FAILED"
   | "SUSPEND_FAILED"
   | "RESUME_FAILED"
+  | "UNINIT_FAILED"
   | "UNKNOWN";
 
 export interface LobsterError {

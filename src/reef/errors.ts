@@ -25,6 +25,7 @@ const STATUS_MAP: Record<ErrorCode, number> = {
   SNAPSHOT_FAILED: 500,
   SUSPEND_FAILED: 500,
   RESUME_FAILED: 500,
+  UNINIT_FAILED: 500,
   UNKNOWN: 500,
 };
 

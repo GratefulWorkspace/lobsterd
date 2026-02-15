@@ -738,6 +738,53 @@ export function removeAgentLockdownRules(
     .map(() => undefined);
 }
 
+/** Remove LOBSTER-* iptables chains and their jump rules from built-in chains. */
+export function flushAndRemoveChains(): ResultAsync<void, LobsterError> {
+  const ignore = () =>
+    okAsync({ exitCode: 0, stdout: "", stderr: "" } as const);
+
+  // 1. Delete jump rules from built-in chains (ignore if absent)
+  return (
+    execUnchecked(["iptables", "-D", "INPUT", "-j", CHAIN_INPUT])
+      .orElse(ignore)
+      .andThen(() =>
+        execUnchecked([
+          "iptables",
+          "-D",
+          "FORWARD",
+          "-j",
+          CHAIN_FORWARD,
+        ]).orElse(ignore),
+      )
+      .andThen(() =>
+        execUnchecked(["iptables", "-D", "OUTPUT", "-j", CHAIN_OUTPUT]).orElse(
+          ignore,
+        ),
+      )
+      // 2. Flush each chain
+      .andThen(() =>
+        execUnchecked(["iptables", "-F", CHAIN_INPUT]).orElse(ignore),
+      )
+      .andThen(() =>
+        execUnchecked(["iptables", "-F", CHAIN_FORWARD]).orElse(ignore),
+      )
+      .andThen(() =>
+        execUnchecked(["iptables", "-F", CHAIN_OUTPUT]).orElse(ignore),
+      )
+      // 3. Delete each chain
+      .andThen(() =>
+        execUnchecked(["iptables", "-X", CHAIN_INPUT]).orElse(ignore),
+      )
+      .andThen(() =>
+        execUnchecked(["iptables", "-X", CHAIN_FORWARD]).orElse(ignore),
+      )
+      .andThen(() =>
+        execUnchecked(["iptables", "-X", CHAIN_OUTPUT]).orElse(ignore),
+      )
+      .map(() => undefined)
+  );
+}
+
 export function enableIpForwarding(): ResultAsync<void, LobsterError> {
   return exec(["sysctl", "-w", "net.ipv4.ip_forward=1"]).map(() => undefined);
 }
