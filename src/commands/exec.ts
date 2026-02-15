@@ -45,7 +45,7 @@ export function runExec(
     sshArgs.push(`root@${tenant.ipAddress}`);
 
     if (command && command.length > 0) {
-      sshArgs.push("--", ...command);
+      sshArgs.push(...command);
     }
 
     return ResultAsync.fromPromise(
