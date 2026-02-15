@@ -145,14 +145,22 @@ export function runSuspend(
 
         // Step 9: Compute next wake time from cron schedules
         const now = Date.now();
-        const futureSchedules = cronSchedules.filter(
-          (s) => s.nextRunAtMs > now,
-        );
+        const nextRunTimes: number[] = [];
+        for (const s of cronSchedules) {
+          if (s.nextRunAtMs > now) {
+            nextRunTimes.push(s.nextRunAtMs);
+          } else if (s.schedule?.kind === "every" && s.schedule.everyMs) {
+            // nextRunAtMs is stale (job ran but schedule file wasn't updated yet).
+            // Advance by everyMs intervals until we find the next future run.
+            const interval = s.schedule.everyMs;
+            const elapsed = now - s.nextRunAtMs;
+            const steps = Math.ceil(elapsed / interval);
+            nextRunTimes.push(s.nextRunAtMs + steps * interval);
+          }
+        }
         let nextWakeAtMs: number | null = null;
-        if (futureSchedules.length > 0) {
-          const earliest = Math.min(
-            ...futureSchedules.map((s) => s.nextRunAtMs),
-          );
+        if (nextRunTimes.length > 0) {
+          const earliest = Math.min(...nextRunTimes);
           nextWakeAtMs = earliest - config.watchdog.cronWakeAheadMs;
         }
 

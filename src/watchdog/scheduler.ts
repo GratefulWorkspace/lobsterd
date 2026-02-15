@@ -208,6 +208,8 @@ export function startScheduler(
       if (idx !== -1) {
         registry.tenants[idx].status = "active";
       }
+      // Reset idle timer so we don't immediately retry
+      idleSince.delete(name);
       emitter.emit("suspend-failed", {
         tenant: name,
         error: result.error.message,
@@ -250,8 +252,8 @@ export function startScheduler(
         if (!idleSince.has(tenant.name)) {
           idleSince.set(tenant.name, now);
         }
-        const idleMs = now - (idleSince.get(tenant.name) ?? now);
-        if (idleMs >= config.watchdog.idleThresholdMs) {
+        const elapsed = now - (idleSince.get(tenant.name) ?? now);
+        if (elapsed >= config.watchdog.idleThresholdMs) {
           triggerSuspend(tenant.name);
         }
       } else if (connections > 0) {

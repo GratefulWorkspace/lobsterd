@@ -272,6 +272,7 @@ function handleGetCronSchedules() {
         id: j.id,
         name: j.name || j.id,
         nextRunAtMs: j.state.nextRunAtMs,
+        schedule: j.schedule || null,
       }));
     return JSON.stringify({ schedules });
   } catch {
@@ -284,29 +285,43 @@ function handleGetActiveConnections() {
     const tcp = readFileSync("/proc/net/tcp", "utf-8");
     const lines = tcp.trim().split("\n").slice(1); // skip header
     let count = 0;
+    const GATEWAY_PORT = 0x2328; // 9000
     for (const line of lines) {
       const parts = line.trim().split(/\s+/);
       if (parts.length < 4) {
         continue;
       }
       const localAddr = parts[1]; // hex ip:port
-      const remoteAddr = parts[2]; // hex ip:port
       const state = parts[3]; // connection state
       // state 01 = ESTABLISHED
       if (state !== "01") {
         continue;
       }
-      // Exclude the agent's own ports (52, 53) to avoid self-counting
+      // Only count inbound connections on the gateway port (9000).
+      // This ignores outbound API calls, SSH, agent ports, and internal traffic.
       const localPort = parseInt(localAddr.split(":")[1], 16);
-      const remotePort = parseInt(remoteAddr.split(":")[1], 16);
-      if (localPort === VSOCK_PORT || localPort === HEALTH_PORT) {
-        continue;
+      if (localPort === GATEWAY_PORT) {
+        count++;
       }
-      if (remotePort === VSOCK_PORT || remotePort === HEALTH_PORT) {
-        continue;
-      }
-      count++;
     }
+
+    // Also check for running cron jobs — if any job has runningAtMs set,
+    // the gateway is actively executing work even without inbound connections.
+    try {
+      const raw = readFileSync("/root/.openclaw/cron/jobs.json", "utf-8");
+      const data = JSON.parse(raw);
+      if (data.version === 1 && Array.isArray(data.jobs)) {
+        const running = data.jobs.some(
+          (j) => j.enabled !== false && j.state && typeof j.state.runningAtMs === "number",
+        );
+        if (running) {
+          count++;
+        }
+      }
+    } catch {
+      // No cron jobs file — ignore
+    }
+
     return JSON.stringify({ activeConnections: count });
   } catch {
     return JSON.stringify({ activeConnections: 0 });

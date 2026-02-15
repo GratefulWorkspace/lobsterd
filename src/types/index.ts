@@ -2,10 +2,20 @@
 
 export type TenantStatus = "active" | "suspended" | "removing";
 
+export interface CronSchedule {
+  kind: "cron" | "every" | "at";
+  expr?: string;
+  tz?: string;
+  everyMs?: number;
+  anchorMs?: number;
+  at?: string;
+}
+
 export interface CronScheduleInfo {
   id: string;
   name: string;
   nextRunAtMs: number;
+  schedule?: CronSchedule | null;
 }
 
 export interface SuspendInfo {

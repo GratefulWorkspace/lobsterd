@@ -39,6 +39,14 @@ export function checkGatewayPort(
 ): ResultAsync<HealthCheckResult, LobsterError> {
   return ResultAsync.fromSafePromise(
     (async (): Promise<HealthCheckResult> => {
+      // Skip if the tenant was suspended mid-tick to avoid hitting the sentinel
+      if (tenant.status === "suspended") {
+        return {
+          check: "net.gateway",
+          status: "ok",
+          message: "Skipped — tenant is suspended",
+        };
+      }
       try {
         const _socket = await Bun.connect({
           hostname: tenant.ipAddress,
