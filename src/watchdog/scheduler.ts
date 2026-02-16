@@ -298,9 +298,19 @@ export function startScheduler(
     }
   }, config.watchdog.trafficPollMs);
 
-  // ── Initialize sentinels + cron timers for already-suspended tenants ────
+  // ── Cleanup stale sentinel IPs + initialize for suspended tenants ────
   (async () => {
     for (const tenant of registry.tenants) {
+      // Remove any stale loopback alias left by a crashed watchdog
+      await execUnchecked([
+        "ip",
+        "addr",
+        "del",
+        `${tenant.ipAddress}/32`,
+        "dev",
+        "lo",
+      ]);
+
       if (tenant.status === "suspended" && tenant.suspendInfo) {
         await startSentinelForTenant(tenant);
         scheduleCronWake(tenant);
