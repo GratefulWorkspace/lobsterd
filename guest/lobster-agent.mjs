@@ -323,7 +323,6 @@ async function handlePokeCron() {
   }
 
   try {
-    // Get authoritative job list via RPC (triggers recomputeNextRuns server-side)
     const listResult = await gatewayRpc(token, "cron.list", {});
     if (!listResult.ok) {
       return JSON.stringify({ error: "cron.list failed" });
@@ -333,29 +332,41 @@ async function handlePokeCron() {
       (j) => j.enabled !== false && j.state?.nextRunAtMs,
     );
     if (jobs.length === 0) {
-      return JSON.stringify({ ok: true, triggered: 0 });
+      return JSON.stringify({ ok: true, deferred: 0 });
     }
 
-    // Run each job with mode "due" — overdue ones execute + re-arm timer,
-    // not-due ones are a no-op. A single successful run re-arms for all jobs.
-    let triggered = 0;
+    // Schedule deferred triggers for upcoming jobs. Fire 5s AFTER the
+    // scheduled cron time — this gives OpenClaw's own stale timer a
+    // chance to handle it naturally. Our cron.run(due) acts as the
+    // safety net: if OpenClaw already ran the job, "due" returns
+    // not-due (no-op); if it didn't, we catch it.
+    const POKE_DELAY_MS = 5_000;
+    const now = Date.now();
+    let deferred = 0;
     for (const job of jobs) {
-      try {
-        const runResult = await gatewayRpc(token, "cron.run", {
-          id: job.id,
-          mode: "due",
-        });
-        if (runResult.ok && runResult.data?.ran) {
-          triggered++;
+      const delay = Math.max(0, job.state.nextRunAtMs - now) + POKE_DELAY_MS;
+      console.log(
+        `[lobster-agent] Deferring cron.run for ${job.id} in ${Math.round(delay / 1000)}s`,
+      );
+      setTimeout(async () => {
+        try {
+          const result = await gatewayRpc(token, "cron.run", {
+            id: job.id,
+            mode: "due",
+          });
+          console.log(
+            `[lobster-agent] cron.run ${job.id}: ran=${result.data?.ran ?? false}`,
+          );
+        } catch (e) {
+          console.log(
+            `[lobster-agent] cron.run for ${job.id} failed: ${e.message}`,
+          );
         }
-      } catch (e) {
-        console.log(
-          `[lobster-agent] cron.run for ${job.id} failed: ${e.message}`,
-        );
-      }
+      }, delay);
+      deferred++;
     }
 
-    return JSON.stringify({ ok: true, triggered });
+    return JSON.stringify({ ok: true, deferred });
   } catch (e) {
     return JSON.stringify({ error: e.message });
   }

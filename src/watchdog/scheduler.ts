@@ -166,13 +166,11 @@ export function startScheduler(
       });
       clearCronTimer(name);
       if (trigger === "cron") {
-        // Wait for the in-VM gateway to stabilize after snapshot restore
-        // before poking cron via its WebSocket RPC.
-        await new Promise((r) => setTimeout(r, 5_000));
-
         // Poke cron via cron.run(mode:"due") to trigger overdue jobs and re-arm
         // the timer immediately, instead of waiting up to 60s for the stale
-        // setTimeout clamp to expire after snapshot resume
+        // setTimeout clamp to expire after snapshot resume.
+        // The agent defers each run to 5s after the job's nextRunAtMs,
+        // giving OpenClaw's own timer a chance to fire naturally first.
         const idx = registry.tenants.findIndex((t) => t.name === name);
         if (idx !== -1) {
           await vsock
