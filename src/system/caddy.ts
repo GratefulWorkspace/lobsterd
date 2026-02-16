@@ -54,6 +54,11 @@ export function addRoute(
           try_duration: "30s",
           try_interval: "500ms",
         },
+        headers: {
+          request: {
+            set: { Connection: ["close"] },
+          },
+        },
       },
     ],
   };
