@@ -687,10 +687,13 @@ async function handlePokeHeartbeat() {
 }
 
 function handleGetActiveConnections() {
+  let tcp = 0;
+  let cron = 0;
+  let heartbeat = 0;
+
   try {
-    const tcp = readFileSync("/proc/net/tcp", "utf-8");
-    const lines = tcp.trim().split("\n").slice(1); // skip header
-    let count = 0;
+    const procTcp = readFileSync("/proc/net/tcp", "utf-8");
+    const lines = procTcp.trim().split("\n").slice(1); // skip header
     const GATEWAY_PORT = 0x2328; // 9000
     for (const line of lines) {
       const parts = line.trim().split(/\s+/);
@@ -707,49 +710,49 @@ function handleGetActiveConnections() {
       // This ignores outbound API calls, SSH, agent ports, and internal traffic.
       const localPort = parseInt(localAddr.split(":")[1], 16);
       if (localPort === GATEWAY_PORT) {
-        count++;
+        tcp++;
       }
     }
-
-    // Also check for running cron jobs — if any job has runningAtMs set,
-    // the gateway is actively executing work even without inbound connections.
-    try {
-      const raw = readFileSync("/root/.openclaw/cron/jobs.json", "utf-8");
-      const data = JSON.parse(raw);
-      if (data.version === 1 && Array.isArray(data.jobs)) {
-        const running = data.jobs.some(
-          (j) =>
-            j.enabled !== false &&
-            j.state &&
-            typeof j.state.runningAtMs === "number" &&
-            j.state.runningAtMs > 0,
-        );
-        if (running) {
-          count++;
-        }
-      }
-    } catch {
-      // No cron jobs file — ignore
-    }
-
-    // Check for active heartbeat execution
-    try {
-      const raw = readFileSync("/tmp/heartbeat-active", "utf-8");
-      const data = JSON.parse(raw);
-      if (
-        typeof data.startedAtMs === "number" &&
-        Date.now() - data.startedAtMs < 600_000
-      ) {
-        count++;
-      }
-    } catch {
-      // No heartbeat marker — ignore
-    }
-
-    return JSON.stringify({ activeConnections: count });
   } catch {
-    return JSON.stringify({ activeConnections: 0 });
+    // /proc/net/tcp unreadable — leave tcp as 0
   }
+
+  // Also check for running cron jobs — if any job has runningAtMs set,
+  // the gateway is actively executing work even without inbound connections.
+  try {
+    const raw = readFileSync("/root/.openclaw/cron/jobs.json", "utf-8");
+    const data = JSON.parse(raw);
+    if (data.version === 1 && Array.isArray(data.jobs)) {
+      const running = data.jobs.some(
+        (j) =>
+          j.enabled !== false &&
+          j.state &&
+          typeof j.state.runningAtMs === "number" &&
+          j.state.runningAtMs > 0,
+      );
+      if (running) {
+        cron = 1;
+      }
+    }
+  } catch {
+    // No cron jobs file — ignore
+  }
+
+  // Check for active heartbeat execution
+  try {
+    const raw = readFileSync("/tmp/heartbeat-active", "utf-8");
+    const data = JSON.parse(raw);
+    if (
+      typeof data.startedAtMs === "number" &&
+      Date.now() - data.startedAtMs < 600_000
+    ) {
+      heartbeat = 1;
+    }
+  } catch {
+    // No heartbeat marker — ignore
+  }
+
+  return JSON.stringify({ tcp, cron, heartbeat });
 }
 
 function handleShutdown() {

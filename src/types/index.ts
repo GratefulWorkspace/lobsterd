@@ -199,6 +199,14 @@ export interface LobsterdConfig {
   buoy?: BuoyConfig;
 }
 
+// ── Active Connections ──────────────────────────────────────────────────────
+
+export interface ActiveConnectionsInfo {
+  tcp: number;
+  cron: number;
+  heartbeat: number;
+}
+
 // ── Guest Stats ─────────────────────────────────────────────────────────────
 
 export interface GuestStats {
@@ -273,7 +281,7 @@ export interface WatchdogEvents {
   };
   "scheduler-poll": {
     tenant: string;
-    connections: number;
+    connections: ActiveConnectionsInfo | null;
     idleFor: number | null;
   };
   "suspend-start": { tenant: string };

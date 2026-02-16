@@ -4,6 +4,7 @@ import { runSuspend } from "../commands/suspend.js";
 import { execUnchecked } from "../system/exec.js";
 import * as vsock from "../system/vsock.js";
 import type {
+  ActiveConnectionsInfo,
   LobsterdConfig,
   Tenant,
   TenantRegistry,
@@ -310,9 +311,12 @@ export function startScheduler(
         config.vsock.agentPort,
         tenant.agentToken,
       );
-      const connections = connResult.isOk() ? connResult.value : -1;
+      const info: ActiveConnectionsInfo | null = connResult.isOk()
+        ? connResult.value
+        : null;
+      const total = info ? info.tcp + info.cron + info.heartbeat : -1;
 
-      if (connections === 0) {
+      if (total === 0) {
         const now = Date.now();
         if (!idleSince.has(tenant.name)) {
           idleSince.set(tenant.name, now);
@@ -320,7 +324,7 @@ export function startScheduler(
         const elapsed = now - (idleSince.get(tenant.name) ?? now);
         emitter.emit("scheduler-poll", {
           tenant: tenant.name,
-          connections,
+          connections: info,
           idleFor: elapsed,
         });
         if (elapsed >= config.watchdog.idleThresholdMs) {
@@ -329,14 +333,14 @@ export function startScheduler(
       } else {
         emitter.emit("scheduler-poll", {
           tenant: tenant.name,
-          connections,
+          connections: info,
           idleFor: null,
         });
-        if (connections > 0) {
+        if (total > 0) {
           idleSince.delete(tenant.name);
         }
       }
-      // connections === -1 means agent unreachable, don't change idle tracking
+      // info === null means agent unreachable, don't change idle tracking
     }
   }, config.watchdog.trafficPollMs);
 

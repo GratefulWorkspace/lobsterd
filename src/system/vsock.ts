@@ -1,6 +1,7 @@
 import { Socket } from "node:net";
 import { ResultAsync } from "neverthrow";
 import type {
+  ActiveConnectionsInfo,
   CronScheduleInfo,
   GuestStats,
   HeartbeatScheduleInfo,
@@ -185,7 +186,7 @@ export function getActiveConnections(
   guestIp: string,
   port: number,
   agentToken: string,
-): ResultAsync<number, LobsterError> {
+): ResultAsync<ActiveConnectionsInfo, LobsterError> {
   const payload = JSON.stringify({
     type: "get-active-connections",
     token: agentToken,
@@ -194,7 +195,11 @@ export function getActiveConnections(
     (async () => {
       const response = await tcpSend(guestIp, port, `${payload}\n`, 3000);
       const data = JSON.parse(response.trim());
-      return (data.activeConnections ?? 0) as number;
+      return {
+        tcp: data.tcp ?? 0,
+        cron: data.cron ?? 0,
+        heartbeat: data.heartbeat ?? 0,
+      } as ActiveConnectionsInfo;
     })(),
     () => ({
       code: "VSOCK_CONNECT_FAILED" as const,
