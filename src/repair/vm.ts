@@ -165,26 +165,19 @@ export function repairVmResponsive(
   config: LobsterdConfig,
 ): ResultAsync<RepairResult, LobsterError> {
   return vsock
-    .injectSecrets(
-      tenant.ipAddress,
-      config.vsock.agentPort,
-      {
-        OPENCLAW_GATEWAY_TOKEN: tenant.gatewayToken,
-      },
-      tenant.agentToken,
-    )
+    .ensureGateway(tenant.ipAddress, config.vsock.agentPort, tenant.agentToken)
     .map(
       (): RepairResult => ({
         repair: "vm.responsive",
         fixed: true,
-        actions: ["Re-injected gateway token via TCP"],
+        actions: ["Ensured gateway is running"],
       }),
     )
     .orElse(() =>
       okAsync<RepairResult, LobsterError>({
         repair: "vm.responsive",
         fixed: false,
-        actions: ["Failed to re-inject secrets — VM may need full restart"],
+        actions: ["Failed to ensure gateway — VM may need full restart"],
       }),
     );
 }

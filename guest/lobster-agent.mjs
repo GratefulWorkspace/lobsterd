@@ -19,6 +19,9 @@ const VSOCK_PORT = 52;
 const HEALTH_PORT = 53;
 const MAX_MESSAGE_SIZE = 1024 * 1024; // 1MB
 let gatewayProcess = null;
+let gatewayRestartCount = 0;
+let gatewayStartedAt = 0;
+let skipAutoRestart = false;
 let secrets = {};
 
 /** Parse a key=value parameter from /proc/cmdline */
@@ -168,6 +171,10 @@ async function handleMessage(msg) {
       return handleSetTime(msg.timestampMs);
     case "get-cron-schedules":
       return await handleGetCronSchedules();
+    case "restart-gateway":
+      return await handleRestartGateway();
+    case "ensure-gateway":
+      return handleLaunchOpenclaw();
     case "get-active-connections":
       return handleGetActiveConnections();
     case "shutdown":
@@ -256,15 +263,60 @@ function handleLaunchOpenclaw() {
     stdio: ["ignore", logFd, logFd],
   });
 
+  gatewayStartedAt = Date.now();
+
   gatewayProcess.on("exit", (code) => {
     console.log(`[lobster-agent] Gateway process exited with code ${code}`);
     gatewayProcess = null;
+
+    if (skipAutoRestart) {
+      return;
+    }
+
+    // Reset counter if it ran for >60s (healthy run)
+    const uptime = Date.now() - gatewayStartedAt;
+    if (uptime > 60_000) {
+      gatewayRestartCount = 0;
+    } else {
+      gatewayRestartCount++;
+    }
+
+    if (gatewayRestartCount <= 5) {
+      console.log(
+        `[lobster-agent] Auto-restarting gateway in 3s (attempt ${gatewayRestartCount}/5)`,
+      );
+      setTimeout(() => {
+        if (!gatewayProcess && !skipAutoRestart) {
+          handleLaunchOpenclaw();
+        }
+      }, 3000);
+    } else {
+      console.log(
+        "[lobster-agent] Gateway exceeded max auto-restart attempts (5), giving up",
+      );
+    }
   });
 
   console.log(
     `[lobster-agent] Launched OpenClaw gateway (PID ${gatewayProcess.pid})`,
   );
   return JSON.stringify({ status: "launched", pid: gatewayProcess.pid });
+}
+
+async function handleRestartGateway() {
+  skipAutoRestart = true;
+
+  if (gatewayProcess) {
+    const exitPromise = new Promise((resolve) => {
+      gatewayProcess.on("exit", resolve);
+    });
+    gatewayProcess.kill("SIGTERM");
+    await exitPromise;
+  }
+
+  gatewayRestartCount = 0;
+  skipAutoRestart = false;
+  return handleLaunchOpenclaw();
 }
 
 function handleGetStats() {
@@ -446,7 +498,8 @@ function handleGetActiveConnections() {
           (j) =>
             j.enabled !== false &&
             j.state &&
-            typeof j.state.runningAtMs === "number" && j.state.runningAtMs > 0,
+            typeof j.state.runningAtMs === "number" &&
+            j.state.runningAtMs > 0,
         );
         if (running) {
           count++;

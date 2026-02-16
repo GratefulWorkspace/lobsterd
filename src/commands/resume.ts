@@ -139,14 +139,22 @@ export function runResume(
       // Step 5.5: Sync guest clock (stale after snapshot restore)
       progress("time-sync", "Syncing guest clock");
       return vsock
-        .setGuestTime(tenant.ipAddress, 52, tenant.agentToken)
+        .setGuestTime(
+          tenant.ipAddress,
+          config.vsock.agentPort,
+          tenant.agentToken,
+        )
         .orElse(() => okAsync(undefined));
     })
     .andThen(() => {
       // Step 5.6: Refresh cron schedules against corrected clock
       progress("cron-refresh", "Refreshing cron schedules");
       return vsock
-        .getCronSchedules(tenant.ipAddress, 52, tenant.agentToken)
+        .getCronSchedules(
+          tenant.ipAddress,
+          config.vsock.agentPort,
+          tenant.agentToken,
+        )
         .map(() => undefined)
         .orElse(() => okAsync(undefined));
     })

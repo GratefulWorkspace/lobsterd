@@ -1,3 +1,4 @@
+import { okAsync } from "neverthrow";
 import { runResume } from "../commands/resume.js";
 import { runSuspend } from "../commands/suspend.js";
 import { execUnchecked } from "../system/exec.js";
@@ -165,6 +166,18 @@ export function startScheduler(
       });
       clearCronTimer(name);
       if (trigger === "cron") {
+        // Restart gateway so OpenClaw runs ops.start() → runMissedJobs() → armTimer()
+        // which ensures cron fires immediately instead of waiting up to 60s
+        const idx = registry.tenants.findIndex((t) => t.name === name);
+        if (idx !== -1) {
+          await vsock
+            .restartGateway(
+              registry.tenants[idx].ipAddress,
+              config.vsock.agentPort,
+              registry.tenants[idx].agentToken,
+            )
+            .orElse(() => okAsync(undefined));
+        }
         // Give the cron job time to start and establish connections
         idleSince.set(name, Date.now() + config.watchdog.cronWakeAheadMs);
       } else {

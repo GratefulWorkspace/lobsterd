@@ -228,6 +228,56 @@ export function setGuestTime(
   );
 }
 
+export function restartGateway(
+  guestIp: string,
+  port: number,
+  agentToken: string,
+): ResultAsync<void, LobsterError> {
+  const payload = JSON.stringify({
+    type: "restart-gateway",
+    token: agentToken,
+  });
+  return ResultAsync.fromPromise(
+    (async () => {
+      const response = await tcpSend(guestIp, port, `${payload}\n`, 10_000);
+      const data = JSON.parse(response.trim());
+      if (data.error) {
+        throw new Error(data.error);
+      }
+    })(),
+    (e) => ({
+      code: "VSOCK_CONNECT_FAILED" as const,
+      message: `Failed to restart gateway: ${e instanceof Error ? e.message : String(e)}`,
+      cause: e,
+    }),
+  );
+}
+
+export function ensureGateway(
+  guestIp: string,
+  port: number,
+  agentToken: string,
+): ResultAsync<void, LobsterError> {
+  const payload = JSON.stringify({
+    type: "ensure-gateway",
+    token: agentToken,
+  });
+  return ResultAsync.fromPromise(
+    (async () => {
+      const response = await tcpSend(guestIp, port, `${payload}\n`, 5000);
+      const data = JSON.parse(response.trim());
+      if (data.error) {
+        throw new Error(data.error);
+      }
+    })(),
+    (e) => ({
+      code: "VSOCK_CONNECT_FAILED" as const,
+      message: `Failed to ensure gateway: ${e instanceof Error ? e.message : String(e)}`,
+      cause: e,
+    }),
+  );
+}
+
 export function getLogs(
   guestIp: string,
   port: number,
