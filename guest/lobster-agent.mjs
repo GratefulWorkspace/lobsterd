@@ -469,7 +469,11 @@ function gatewayRpc(token, method, params) {
         // Step 3: RPC response → done (settle before close to avoid
         // Bun's synchronous onclose firing reject first)
         if (msg.type === "res" && msg.id === "2") {
-          settle(resolve, { ok: msg.ok, data: msg.data, error: msg.error });
+          settle(resolve, {
+            ok: msg.ok,
+            data: msg.payload ?? msg.data,
+            error: msg.error,
+          });
           ws.close();
         }
       } catch (e) {
