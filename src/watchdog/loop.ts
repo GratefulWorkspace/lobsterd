@@ -131,7 +131,12 @@ export function startWatchdog(
           const failed = checkResults.filter((c) => c.status !== "ok");
           emitter.emit("repair-start", { tenant: tenant.name, checks: failed });
 
-          const repairResult = await runRepairs(tenant, failed, config);
+          const repairResult = await runRepairs(
+            tenant,
+            failed,
+            config,
+            registry,
+          );
           if (repairResult.isOk()) {
             emitter.emit("repair-complete", {
               tenant: tenant.name,

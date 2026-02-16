@@ -5,6 +5,7 @@ import type {
   LobsterError,
   RepairResult,
   Tenant,
+  TenantRegistry,
 } from "../types/index.js";
 import { repairCaddyRoute, repairTap } from "./network.js";
 import { repairVmProcess, repairVmResponsive } from "./vm.js";
@@ -12,13 +13,14 @@ import { repairVmProcess, repairVmResponsive } from "./vm.js";
 type RepairFn = (
   tenant: Tenant,
   config: LobsterdConfig,
+  registry: TenantRegistry,
 ) => ResultAsync<RepairResult, LobsterError>;
 
 const REPAIR_MAP: Record<string, RepairFn[]> = {
   "vm.process": [repairVmProcess],
   "vm.responsive": [repairVmResponsive],
   "net.tap": [repairTap],
-  "net.gateway": [repairVmProcess],
+  "net.gateway": [repairVmResponsive],
   "net.caddy-route": [repairCaddyRoute],
 };
 
@@ -26,6 +28,7 @@ export function runRepairs(
   tenant: Tenant,
   failedChecks: HealthCheckResult[],
   config: LobsterdConfig,
+  registry: TenantRegistry,
 ): ResultAsync<RepairResult[], LobsterError> {
   const seen = new Set<RepairFn>();
   const repairFns: RepairFn[] = [];
@@ -47,7 +50,7 @@ export function runRepairs(
   return repairFns.reduce<ResultAsync<RepairResult[], LobsterError>>(
     (acc, fn) =>
       acc.andThen((results) =>
-        fn(tenant, config)
+        fn(tenant, config, registry)
           .map((result) => [...results, result])
           .orElse(() =>
             ok([

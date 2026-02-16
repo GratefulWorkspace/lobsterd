@@ -2,7 +2,12 @@ import { runResume } from "../commands/resume.js";
 import { runSuspend } from "../commands/suspend.js";
 import { execUnchecked } from "../system/exec.js";
 import * as vsock from "../system/vsock.js";
-import type { LobsterdConfig, Tenant, TenantRegistry } from "../types/index.js";
+import type {
+  LobsterdConfig,
+  Tenant,
+  TenantRegistry,
+  TenantWatchState,
+} from "../types/index.js";
 import type { WatchdogEmitter } from "./events.js";
 
 export interface SchedulerHandle {
@@ -70,6 +75,7 @@ export function startScheduler(
   config: LobsterdConfig,
   registry: TenantRegistry,
   emitter: WatchdogEmitter,
+  getStates: () => Record<string, TenantWatchState>,
 ): SchedulerHandle {
   let running = true;
 
@@ -247,6 +253,13 @@ export function startScheduler(
         continue;
       }
       if (inFlight.has(tenant.name)) {
+        continue;
+      }
+
+      // Don't poll or suspend if watchdog reports unhealthy — let repair finish
+      const watchState = getStates()[tenant.name]?.state;
+      if (watchState && watchState !== "HEALTHY" && watchState !== "UNKNOWN") {
+        idleSince.delete(tenant.name);
         continue;
       }
 

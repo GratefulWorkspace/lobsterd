@@ -1,4 +1,5 @@
 import { okAsync, ResultAsync } from "neverthrow";
+import { saveRegistry } from "../config/loader.js";
 import * as fc from "../system/firecracker.js";
 import * as jailer from "../system/jailer.js";
 import * as vsock from "../system/vsock.js";
@@ -7,11 +8,13 @@ import type {
   LobsterError,
   RepairResult,
   Tenant,
+  TenantRegistry,
 } from "../types/index.js";
 
 export function repairVmProcess(
   tenant: Tenant,
   config: LobsterdConfig,
+  registry: TenantRegistry,
 ): ResultAsync<RepairResult, LobsterError> {
   const actions: string[] = [];
 
@@ -132,13 +135,17 @@ export function repairVmProcess(
         tenant.agentToken,
       );
     })
-    .map(
-      (): RepairResult => ({
-        repair: "vm.process",
-        fixed: true,
-        actions,
-      }),
-    )
+    .andThen(() => {
+      actions.push("Secrets injected");
+      // Persist updated vmPid to disk so subsequent ticks don't see stale state
+      return saveRegistry(registry).map(
+        (): RepairResult => ({
+          repair: "vm.process",
+          fixed: true,
+          actions: [...actions, "Registry saved"],
+        }),
+      );
+    })
     .orElse(() =>
       okAsync<RepairResult, LobsterError>({
         repair: "vm.process",

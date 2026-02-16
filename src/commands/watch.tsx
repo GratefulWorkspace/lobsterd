@@ -62,7 +62,12 @@ export async function runWatch(
   }
 
   const handle = startWatchdog(config, registry);
-  const scheduler = startScheduler(config, registry, handle.emitter);
+  const scheduler = startScheduler(
+    config,
+    registry,
+    handle.emitter,
+    handle.states,
+  );
 
   if (opts.daemon) {
     // Daemon mode: log to console instead of TUI

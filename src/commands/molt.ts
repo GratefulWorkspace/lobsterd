@@ -82,7 +82,7 @@ export function runMolt(
                       "repairing",
                       `${failed.length} issue(s) found`,
                     );
-                    return runRepairs(tenant, failed, config).andThen(
+                    return runRepairs(tenant, failed, config, registry).andThen(
                       (repairs) => {
                         progress(tenant.name, "verifying");
                         return runAllChecks(tenant, config).map(
