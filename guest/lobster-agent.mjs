@@ -5,7 +5,7 @@
 // Authenticated via agent_token passed in kernel command line.
 
 import { execSync, spawn } from "node:child_process";
-import { timingSafeEqual } from "node:crypto";
+import crypto, { timingSafeEqual } from "node:crypto";
 import {
   chmodSync,
   mkdirSync,
@@ -14,6 +14,51 @@ import {
   writeFileSync,
 } from "node:fs";
 import { createServer } from "node:net";
+
+// Ed25519 device identity for OpenClaw gateway auth (scopes require device)
+const ED25519_SPKI_PREFIX = Buffer.from([
+  0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00,
+]);
+const deviceKeypair = crypto.generateKeyPairSync("ed25519");
+const devicePublicKeyRaw = (() => {
+  const spki = deviceKeypair.publicKey.export({ type: "spki", format: "der" });
+  if (
+    spki.length === ED25519_SPKI_PREFIX.length + 32 &&
+    spki.subarray(0, ED25519_SPKI_PREFIX.length).equals(ED25519_SPKI_PREFIX)
+  ) {
+    return spki.subarray(ED25519_SPKI_PREFIX.length);
+  }
+  return spki;
+})();
+const deviceId = crypto
+  .createHash("sha256")
+  .update(devicePublicKeyRaw)
+  .digest("hex");
+const devicePublicKeyB64 = devicePublicKeyRaw.toString("base64url");
+
+/** Build device auth object for gateway connect messages */
+function buildDeviceAuth(token, scopes) {
+  const signedAtMs = Date.now();
+  const payload = [
+    "v1",
+    deviceId,
+    "gateway-client",
+    "backend",
+    "operator",
+    scopes.join(","),
+    String(signedAtMs),
+    token || "",
+  ].join("|");
+  const signature = crypto
+    .sign(null, Buffer.from(payload, "utf8"), deviceKeypair.privateKey)
+    .toString("base64url");
+  return {
+    id: deviceId,
+    publicKey: devicePublicKeyB64,
+    signature,
+    signedAt: signedAtMs,
+  };
+}
 
 const VSOCK_PORT = 52;
 const HEALTH_PORT = 53;
@@ -386,6 +431,7 @@ function runCronJobs(token, jobIds, mode) {
         // Step 1: Server sends connect challenge → authenticate
         if (msg.type === "event" && msg.event === "connect.challenge") {
           const id = String(nextId++);
+          const scopes = ["operator.admin"];
           ws.send(
             JSON.stringify({
               type: "req",
@@ -401,8 +447,9 @@ function runCronJobs(token, jobIds, mode) {
                   mode: "backend",
                 },
                 role: "operator",
-                scopes: ["operator.read", "operator.write"],
+                scopes,
                 auth: { token },
+                device: buildDeviceAuth(token, scopes),
               },
             }),
           );
@@ -520,6 +567,7 @@ function refreshCronViaGateway(token) {
         // Step 1: Server sends connect challenge → send connect request
         if (msg.type === "event" && msg.event === "connect.challenge") {
           const id = String(nextId++);
+          const scopes = ["operator.admin"];
           ws.send(
             JSON.stringify({
               type: "req",
@@ -535,8 +583,9 @@ function refreshCronViaGateway(token) {
                   mode: "backend",
                 },
                 role: "operator",
-                scopes: ["operator.read"],
+                scopes,
                 auth: { token },
+                device: buildDeviceAuth(token, scopes),
               },
             }),
           );
