@@ -395,7 +395,7 @@ function runCronJobs(token, jobIds, mode) {
                 minProtocol: 3,
                 maxProtocol: 3,
                 client: {
-                  id: "lobster-agent",
+                  id: "gateway-client",
                   version: "1.0.0",
                   platform: "linux",
                   mode: "backend",
@@ -529,7 +529,7 @@ function refreshCronViaGateway(token) {
                 minProtocol: 3,
                 maxProtocol: 3,
                 client: {
-                  id: "lobster-agent",
+                  id: "gateway-client",
                   version: "1.0.0",
                   platform: "linux",
                   mode: "backend",
