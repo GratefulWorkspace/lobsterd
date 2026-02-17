@@ -1,9 +1,15 @@
+import crypto from "node:crypto";
 import { render, useApp, useInput } from "ink";
+import { okAsync } from "neverthrow";
 import { useEffect, useState } from "react";
 import { loadConfig, loadRegistry } from "../config/loader.js";
 import { fetchLogs } from "../system/logs.js";
+import * as vsock from "../system/vsock.js";
 import type { Tenant } from "../types/index.js";
 import { LogStream } from "../ui/LogStream.js";
+
+const HOLD_TTL_MS = 5 * 60_000; // 5 minutes
+const KEEPALIVE_MS = 2 * 60_000; // 2 minutes
 
 function LogsApp({
   tenant,
@@ -83,6 +89,15 @@ export async function runLogs(
     return 1;
   }
 
+  const holdId = crypto.randomUUID();
+  const { ipAddress, agentToken } = tenant;
+  const agentPort = config.vsock.agentPort;
+
+  // Acquire hold (soft-fail)
+  await vsock
+    .acquireHold(ipAddress, agentPort, agentToken, holdId, HOLD_TTL_MS)
+    .orElse(() => okAsync(undefined));
+
   if (!process.stdin.isTTY) {
     // Non-TTY: single fetch and print
     try {
@@ -99,10 +114,23 @@ export async function runLogs(
       console.error(
         `Failed to fetch logs: ${e instanceof Error ? e.message : e}`,
       );
+      await vsock
+        .releaseHold(ipAddress, agentPort, agentToken, holdId)
+        .orElse(() => okAsync(undefined));
       return 1;
     }
+    await vsock
+      .releaseHold(ipAddress, agentPort, agentToken, holdId)
+      .orElse(() => okAsync(undefined));
     return 0;
   }
+
+  // TTY mode: start keepalive
+  const keepalive = setInterval(() => {
+    vsock
+      .acquireHold(ipAddress, agentPort, agentToken, holdId, HOLD_TTL_MS)
+      .orElse(() => okAsync(undefined));
+  }, KEEPALIVE_MS);
 
   const { waitUntilExit } = render(
     <LogsApp
@@ -113,5 +141,10 @@ export async function runLogs(
   );
 
   await waitUntilExit();
+
+  clearInterval(keepalive);
+  await vsock
+    .releaseHold(ipAddress, agentPort, agentToken, holdId)
+    .orElse(() => okAsync(undefined));
   return 0;
 }

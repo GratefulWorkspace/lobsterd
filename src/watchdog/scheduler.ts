@@ -306,7 +306,7 @@ export function startScheduler(
       const info: ActiveConnectionsInfo | null = connResult.isOk()
         ? connResult.value
         : null;
-      const total = info ? info.tcp + info.cron : -1;
+      const total = info ? info.tcp + info.cron + info.hold : -1;
 
       if (total === 0) {
         const now = Date.now();

@@ -387,7 +387,10 @@ function Hero() {
         </div>
 
         {/* Right side — Image */}
-        <div className="lg:col-span-5 lg:self-start lg:pt-36" style={staggerX(400)}>
+        <div
+          className="lg:col-span-5 lg:self-start lg:pt-36"
+          style={staggerX(400)}
+        >
           <div className="relative border border-[#D4D4D8] p-4">
             <img
               src={`${import.meta.env.BASE_URL}images/hero-claw.jpg`}

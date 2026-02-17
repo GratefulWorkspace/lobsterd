@@ -1,13 +1,17 @@
+import crypto from "node:crypto";
 import { errAsync, okAsync, type ResultAsync } from "neverthrow";
 import { runAllChecks } from "../checks/index.js";
 import { loadConfig, loadRegistry } from "../config/loader.js";
 import { runRepairs } from "../repair/index.js";
+import * as vsock from "../system/vsock.js";
 import type {
   HealthCheckResult,
   LobsterError,
   RepairResult,
   Tenant,
 } from "../types/index.js";
+
+const HOLD_TTL_MS = 5 * 60_000; // 5 minutes
 
 export interface MoltTenantResult {
   tenant: string;
@@ -57,57 +61,85 @@ export function runMolt(
         return tenants.reduce<ResultAsync<MoltTenantResult[], LobsterError>>(
           (acc, tenant) =>
             acc.andThen((results) => {
-              progress(tenant.name, "checking");
-              return runAllChecks(tenant, config)
-                .andThen(
-                  (
-                    initialChecks,
-                  ): ResultAsync<MoltTenantResult, LobsterError> => {
-                    const failed = initialChecks.filter(
-                      (c) => c.status !== "ok",
-                    );
-                    if (failed.length === 0) {
-                      progress(tenant.name, "done", "Already healthy");
-                      return okAsync({
-                        tenant: tenant.name,
-                        initialChecks,
-                        repairs: [],
-                        finalChecks: initialChecks,
-                        healthy: true,
-                      });
-                    }
+              const holdId = crypto.randomUUID();
+              const acquireHold = () =>
+                vsock
+                  .acquireHold(
+                    tenant.ipAddress,
+                    config.vsock.agentPort,
+                    tenant.agentToken,
+                    holdId,
+                    HOLD_TTL_MS,
+                  )
+                  .orElse(() => okAsync(undefined));
+              const releaseHold = () =>
+                vsock
+                  .releaseHold(
+                    tenant.ipAddress,
+                    config.vsock.agentPort,
+                    tenant.agentToken,
+                    holdId,
+                  )
+                  .orElse(() => okAsync(undefined));
 
-                    progress(
-                      tenant.name,
-                      "repairing",
-                      `${failed.length} issue(s) found`,
-                    );
-                    return runRepairs(tenant, failed, config, registry).andThen(
-                      (repairs) => {
-                        progress(tenant.name, "verifying");
-                        return runAllChecks(tenant, config).map(
-                          (finalChecks) => ({
+              return acquireHold()
+                .andThen(() => {
+                  progress(tenant.name, "checking");
+                  return runAllChecks(tenant, config)
+                    .andThen(
+                      (
+                        initialChecks,
+                      ): ResultAsync<MoltTenantResult, LobsterError> => {
+                        const failed = initialChecks.filter(
+                          (c) => c.status !== "ok",
+                        );
+                        if (failed.length === 0) {
+                          progress(tenant.name, "done", "Already healthy");
+                          return okAsync({
                             tenant: tenant.name,
                             initialChecks,
-                            repairs,
-                            finalChecks,
-                            healthy: finalChecks.every(
-                              (c) => c.status === "ok",
-                            ),
-                          }),
+                            repairs: [],
+                            finalChecks: initialChecks,
+                            healthy: true,
+                          });
+                        }
+
+                        progress(
+                          tenant.name,
+                          "repairing",
+                          `${failed.length} issue(s) found`,
                         );
+                        return runRepairs(
+                          tenant,
+                          failed,
+                          config,
+                          registry,
+                        ).andThen((repairs) => {
+                          progress(tenant.name, "verifying");
+                          return runAllChecks(tenant, config).map(
+                            (finalChecks) => ({
+                              tenant: tenant.name,
+                              initialChecks,
+                              repairs,
+                              finalChecks,
+                              healthy: finalChecks.every(
+                                (c) => c.status === "ok",
+                              ),
+                            }),
+                          );
+                        });
                       },
-                    );
-                  },
-                )
-                .map((result) => {
-                  progress(
-                    tenant.name,
-                    "done",
-                    result.healthy ? "Healthy" : "Still degraded",
-                  );
-                  return [...results, result];
-                });
+                    )
+                    .map((result) => {
+                      progress(
+                        tenant.name,
+                        "done",
+                        result.healthy ? "Healthy" : "Still degraded",
+                      );
+                      return [...results, result];
+                    });
+                })
+                .andThen((r) => releaseHold().map(() => r));
             }),
           okAsync<MoltTenantResult[], LobsterError>([]),
         );
