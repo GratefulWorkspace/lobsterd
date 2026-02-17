@@ -46,31 +46,31 @@ const FEATURES = [
     num: "01",
     name: "MICROVM ISOLATION",
     desc: "Each tenant runs in a Firecracker microVM with jailer enforcement — UID/GID namespacing, chroot, seccomp BPF (~35 syscalls), cgroup limits. Only 4 virtio devices remain. No vsock.",
-    image: "/images/server-room.png",
+    image: "/images/server-room.jpg",
   },
   {
     num: "02",
     name: "INTELLIGENT SUSPEND",
     desc: "Auto-suspends idle VMs when zero active connections detected. Wake-on-request via TCP sentinel masks ~3s resume latency. Cron-aware scheduling wakes VMs 30s before scheduled jobs.",
-    image: "/images/control-panel.png",
+    image: "/images/control-panel.jpg",
   },
   {
     num: "03",
     name: "SELF-HEALING WATCHDOG",
     desc: "State machine monitors every 10s: VM process, agent responsiveness, TAP device, gateway status, Caddy routes. Auto-repairs with configurable cooldowns and escalation paths.",
-    image: "/images/watchdog-gauges.png",
+    image: "/images/watchdog-gauges.jpg",
   },
   {
     num: "04",
     name: "NETWORK SECURITY",
     desc: "Per-tenant /30 subnet with dedicated TAP device. iptables chains at position 1 block cross-tenant traffic, RFC 1918, link-local. Connlimit and rate limiting per-tenant.",
-    image: "/images/security-layers.png",
+    image: "/images/security-layers.jpg",
   },
   {
     num: "05",
     name: "REST API",
     desc: "Full HTTP API mirroring every CLI command. Bearer token auth, auto-generated OpenAPI 3.1 spec. Spawn, evict, molt, snap — all available over HTTP.",
-    image: "/images/buoy-beacon.png",
+    image: "/images/buoy-beacon.jpg",
   },
 ];
 
@@ -390,7 +390,7 @@ function Hero() {
         <div className="lg:col-span-5" style={staggerX(400)}>
           <div className="relative border border-[#D4D4D8] p-4">
             <img
-              src="/images/hero-claw.png"
+              src="/images/hero-claw.jpg"
               alt="Mechanical lobster claw — brushed steel and copper"
               className="w-full aspect-[16/10] object-cover grayscale"
             />
@@ -807,7 +807,7 @@ function Security() {
       <div
         className="absolute inset-0 bg-cover bg-center grayscale"
         style={{
-          backgroundImage: "url(/images/security-layers.png)",
+          backgroundImage: "url(/images/security-layers.jpg)",
           opacity: 0.07,
         }}
       />
@@ -907,7 +907,7 @@ function Architecture() {
       <div
         className="absolute inset-0 bg-cover bg-center grayscale"
         style={{
-          backgroundImage: "url(/images/lobster-traps.png)",
+          backgroundImage: "url(/images/lobster-traps.jpg)",
           opacity: 0.05,
         }}
       />
