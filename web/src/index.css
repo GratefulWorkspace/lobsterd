@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+@theme {
+  --color-warm: #ebebe8;
+  --color-dark: #18181b;
+  --color-accent: #e8450d;
+  --color-surface: #f4f4f5;
+}
+
+/* Custom utilities */
+.ease-expo {
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.stroke-text {
+  -webkit-text-stroke: 1.5px #18181b;
+  color: transparent;
+}
+
+.stroke-text-accent {
+  -webkit-text-stroke: 1.5px #e8450d;
+  color: transparent;
+}
+
+/* Marquee */
+@keyframes marquee-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  animation: marquee-scroll 20s linear infinite;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+/* Smooth scroll */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #ebebe8;
+  color: #18181b;
+  font-family: "Inter", sans-serif;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #ebebe8;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d4d4d8;
+}
