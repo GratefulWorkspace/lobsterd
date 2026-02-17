@@ -70,7 +70,7 @@ ssh root@${HOST} "git clone https://github.com/GratefulWorkspace/lobsterd.git /r
 
 ### 5. Configure OpenClaw defaults for testing
 
-Edit `src/config/defaults.ts` on the droplet to add `controlUi`, `models`, and `agents` to the `openclaw.defaultConfig` block. `models` and `agents` are top-level siblings of `gateway`, not nested inside it.
+Edit `src/config/defaults.ts` on the droplet to add `controlUi` to disable device auth.
 
 ```bash
 ssh root@${HOST} 'cd /root/lobsterd && python3 << "PYEOF"
@@ -86,38 +86,6 @@ src = re.sub(
         },""",
     src,
     flags=re.DOTALL,
-)
-# Add models and agents as siblings of gateway (inside defaultConfig)
-src = src.replace(
-    "      },\n    },\n  },\n};",
-    """      },
-      models: {
-        providers: {
-          fireworks: {
-            baseUrl: "https://api.fireworks.ai/inference/v1",
-            apiKey: "fw_DejMZ1oxWrQpY7akwJDJAh",
-            api: "openai-completions",
-            models: [
-              {
-                id: "accounts/fireworks/models/kimi-k2p5",
-                name: "Kimi K2.5",
-                contextWindow: 131072,
-                maxTokens: 32768,
-              },
-            ],
-          },
-        },
-      },
-      agents: {
-        defaults: {
-          model: {
-            primary: "fireworks/accounts/fireworks/models/kimi-k2p5",
-          },
-        },
-      },
-    },
-  },
-};""",
 )
 f.write_text(src)
 print("Patched successfully")

@@ -222,8 +222,10 @@ async function handleMessage(msg) {
       return await handlePokeCron();
     case "ensure-gateway":
       return handleLaunchOpenclaw();
+    case "get-heartbeat-schedule":
+      return await handleGetHeartbeatSchedule();
     case "get-active-connections":
-      return handleGetActiveConnections();
+      return await handleGetActiveConnections();
     case "shutdown":
       return handleShutdown();
     default:
@@ -528,11 +530,104 @@ function gatewayRpc(token, method, params) {
   });
 }
 
-function handleGetActiveConnections() {
+/** Parse duration string like "30m", "2h", "90s" to milliseconds */
+function parseDurationMs(s) {
+  const match = s.match(/^(\d+(?:\.\d+)?)\s*(s|m|h)$/);
+  if (!match) {
+    return null;
+  }
+  const value = parseFloat(match[1]);
+  const unit = match[2];
+  const multipliers = { s: 1_000, m: 60_000, h: 3_600_000 };
+  return Math.round(value * multipliers[unit]);
+}
+
+async function handleGetHeartbeatSchedule() {
+  const token = secrets.OPENCLAW_GATEWAY_TOKEN;
+  if (!token || !gatewayProcess) {
+    return JSON.stringify({ enabled: false, intervalMs: 0, nextBeatAtMs: 0 });
+  }
+
+  // Read heartbeat interval from OpenClaw config
+  let intervalMs = 0;
+  let rawEvery;
   try {
-    const tcp = readFileSync("/proc/net/tcp", "utf-8");
-    const lines = tcp.trim().split("\n").slice(1); // skip header
-    let count = 0;
+    const cfg = JSON.parse(
+      readFileSync("/root/.openclaw/openclaw.json", "utf-8"),
+    );
+    rawEvery = cfg?.agents?.defaults?.heartbeat?.every;
+    if (typeof rawEvery === "string") {
+      intervalMs = parseDurationMs(rawEvery) || 0;
+    }
+    console.log(
+      `[heartbeat-schedule] config every=${JSON.stringify(rawEvery)} → intervalMs=${intervalMs}`,
+    );
+  } catch (e) {
+    console.log(`[heartbeat-schedule] config read failed: ${e.message}`);
+  }
+
+  if (intervalMs <= 0) {
+    console.log(
+      `[heartbeat-schedule] disabled (intervalMs=0, rawEvery=${JSON.stringify(rawEvery)})`,
+    );
+    return JSON.stringify({ enabled: false, intervalMs: 0, nextBeatAtMs: 0 });
+  }
+
+  // Get last heartbeat timestamp from gateway (short timeout — if the
+  // gateway is busy we fall back to now + intervalMs which is fine)
+  let lastTs = 0;
+  try {
+    const result = await Promise.race([
+      gatewayRpc(token, "last-heartbeat", {}),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("fast timeout")), 3000),
+      ),
+    ]);
+    console.log(
+      `[heartbeat-schedule] RPC raw response: ok=${result.ok} data=${JSON.stringify(result.data)}`,
+    );
+    if (result.ok && result.data?.ts) {
+      lastTs = result.data.ts;
+      console.log(
+        `[heartbeat-schedule] last event: status=${result.data.status} reason=${result.data.reason} ts=${lastTs} (${new Date(lastTs).toISOString()})`,
+      );
+    } else {
+      console.log(
+        `[heartbeat-schedule] no ts in response (data is ${result.data === null ? "null" : typeof result.data})`,
+      );
+    }
+  } catch (e) {
+    console.log(`[heartbeat-schedule] RPC failed: ${e.message}`);
+  }
+
+  const now = Date.now();
+  let nextBeatAtMs = lastTs > 0 ? lastTs + intervalMs : now + intervalMs;
+
+  // If the computed next beat is in the past (e.g. the gateway's heartbeat
+  // runner didn't fire because its monotonic-clock setTimeout was frozen
+  // during VM suspend), project forward to the next future beat.
+  if (nextBeatAtMs <= now && lastTs > 0) {
+    const elapsed = now - lastTs;
+    const periods = Math.ceil(elapsed / intervalMs);
+    nextBeatAtMs = lastTs + periods * intervalMs;
+    console.log(
+      `[heartbeat-schedule] nextBeat was in the past, projected forward by ${periods} period(s)`,
+    );
+  }
+
+  console.log(
+    `[heartbeat-schedule] lastTs=${lastTs} now=${now} nextBeatAtMs=${nextBeatAtMs} (in ${Math.round((nextBeatAtMs - now) / 1000)}s, ${nextBeatAtMs > now ? "FUTURE" : "PAST"})`,
+  );
+  return JSON.stringify({ enabled: true, intervalMs, nextBeatAtMs });
+}
+
+async function handleGetActiveConnections() {
+  let tcp = 0;
+  let cron = 0;
+
+  try {
+    const procTcp = readFileSync("/proc/net/tcp", "utf-8");
+    const lines = procTcp.trim().split("\n").slice(1); // skip header
     const GATEWAY_PORT = 0x2328; // 9000
     for (const line of lines) {
       const parts = line.trim().split(/\s+/);
@@ -549,17 +644,22 @@ function handleGetActiveConnections() {
       // This ignores outbound API calls, SSH, agent ports, and internal traffic.
       const localPort = parseInt(localAddr.split(":")[1], 16);
       if (localPort === GATEWAY_PORT) {
-        count++;
+        tcp++;
       }
     }
+  } catch {
+    // /proc/net/tcp unreadable — leave tcp as 0
+  }
 
-    // Also check for running cron jobs — if any job has runningAtMs set,
-    // the gateway is actively executing work even without inbound connections.
+  // Check for running cron jobs via gateway RPC (in-memory state tracks
+  // runningAtMs even though jobs.json on disk does not).
+  const token = secrets.OPENCLAW_GATEWAY_TOKEN;
+  if (token && gatewayProcess) {
     try {
-      const raw = readFileSync("/root/.openclaw/cron/jobs.json", "utf-8");
-      const data = JSON.parse(raw);
-      if (data.version === 1 && Array.isArray(data.jobs)) {
-        const running = data.jobs.some(
+      const result = await gatewayRpc(token, "cron.list", {});
+      if (result.ok) {
+        const jobs = result.data?.jobs ?? [];
+        const running = jobs.some(
           (j) =>
             j.enabled !== false &&
             j.state &&
@@ -567,17 +667,16 @@ function handleGetActiveConnections() {
             j.state.runningAtMs > 0,
         );
         if (running) {
-          count++;
+          cron = 1;
         }
       }
     } catch {
-      // No cron jobs file — ignore
+      // RPC failed — leave cron as 0
     }
-
-    return JSON.stringify({ activeConnections: count });
-  } catch {
-    return JSON.stringify({ activeConnections: 0 });
   }
+
+  console.log(`[active-connections] result: tcp=${tcp} cron=${cron}`);
+  return JSON.stringify({ tcp, cron });
 }
 
 function handleShutdown() {

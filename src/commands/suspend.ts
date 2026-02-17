@@ -8,6 +8,7 @@ import * as jailer from "../system/jailer.js";
 import * as vsock from "../system/vsock.js";
 import type {
   CronScheduleInfo,
+  HeartbeatScheduleInfo,
   LobsterError,
   SuspendInfo,
   Tenant,
@@ -49,6 +50,7 @@ export function runSuspend(
   let tenant: Tenant;
   let registry: TenantRegistry;
   let cronSchedules: CronScheduleInfo[] = [];
+  let heartbeatSchedule: HeartbeatScheduleInfo | null = null;
   let snapshotDir: string;
 
   return loadConfig().andThen((config) =>
@@ -87,17 +89,65 @@ export function runSuspend(
           })
           .orElse(() => okAsync(undefined));
       })
+      .andThen(() => {
+        // Step 1a: Fetch heartbeat schedule (soft-fail)
+        progress("heartbeat", "Fetching heartbeat schedule from guest agent");
+        return vsock
+          .getHeartbeatSchedule(
+            tenant.ipAddress,
+            config.vsock.agentPort,
+            tenant.agentToken,
+          )
+          .map((hb) => {
+            heartbeatSchedule = hb;
+            progress(
+              "heartbeat",
+              hb
+                ? `Heartbeat: enabled=${hb.enabled} intervalMs=${hb.intervalMs} nextBeatAtMs=${hb.nextBeatAtMs} (in ${Math.round((hb.nextBeatAtMs - Date.now()) / 1000)}s)`
+                : "Heartbeat: null (disabled or no config)",
+            );
+            return undefined;
+          })
+          .orElse((err) => {
+            progress(
+              "heartbeat",
+              `Heartbeat fetch failed: ${err.code} ${err.message}`,
+            );
+            return okAsync(undefined);
+          });
+      })
       .andThen((): ResultAsync<void, LobsterError> => {
         // Step 1b: Early bail if next wake would be in the past
         const now = Date.now();
+        const candidates: number[] = [];
+
         const futureRuns = computeFutureRunTimes(cronSchedules, now);
         if (futureRuns.length > 0) {
-          const earliest = Math.min(...futureRuns);
+          candidates.push(Math.min(...futureRuns));
+        }
+        if (heartbeatSchedule?.enabled) {
+          if (heartbeatSchedule.nextBeatAtMs > now) {
+            candidates.push(heartbeatSchedule.nextBeatAtMs);
+          } else {
+            progress(
+              "heartbeat",
+              `Heartbeat nextBeatAtMs=${heartbeatSchedule.nextBeatAtMs} is in the PAST (now=${now}, delta=${Math.round((now - heartbeatSchedule.nextBeatAtMs) / 1000)}s ago) — not adding as wake candidate`,
+            );
+          }
+        } else {
+          progress(
+            "heartbeat",
+            `Heartbeat not adding candidate: schedule=${heartbeatSchedule ? `enabled=${heartbeatSchedule.enabled}` : "null"}`,
+          );
+        }
+
+        if (candidates.length > 0) {
+          const earliest = Math.min(...candidates);
           const nextWakeAtMs = earliest - config.watchdog.cronWakeAheadMs;
           if (nextWakeAtMs <= now) {
             return errAsync({
               code: "SUSPEND_SKIPPED",
-              message: `Next cron wake is ${Math.round((earliest - now) / 1000)}s away (within ${config.watchdog.cronWakeAheadMs / 1000}s wake-ahead window), skipping suspend`,
+              message: `Next wake is ${Math.round((earliest - now) / 1000)}s away (within ${config.watchdog.cronWakeAheadMs / 1000}s wake-ahead window), skipping suspend`,
             });
           }
         }
@@ -167,15 +217,52 @@ export function runSuspend(
         // so the baseline includes trailing TCP teardown / ARP chatter
         const lastRxBytes = readTapRxBytes(tenant.tapDev);
 
-        // Step 9: Compute next wake time from cron schedules
+        // Step 9: Compute next wake time from cron + heartbeat schedules
         // (Step 1b already validated that this won't be in the past)
         const now = Date.now();
         let nextWakeAtMs: number | null = null;
+        let hasCronWake = false;
+        let hasHeartbeatWake = false;
+
         const futureRuns = computeFutureRunTimes(cronSchedules, now);
         if (futureRuns.length > 0) {
-          const earliest = Math.min(...futureRuns);
-          nextWakeAtMs = earliest - config.watchdog.cronWakeAheadMs;
+          hasCronWake = true;
         }
+        if (
+          heartbeatSchedule?.enabled &&
+          heartbeatSchedule.nextBeatAtMs > now
+        ) {
+          hasHeartbeatWake = true;
+        }
+
+        const wakeCandidates: number[] = [];
+        if (hasCronWake) {
+          wakeCandidates.push(
+            Math.min(...futureRuns) - config.watchdog.cronWakeAheadMs,
+          );
+        }
+        if (hasHeartbeatWake && heartbeatSchedule) {
+          wakeCandidates.push(
+            heartbeatSchedule.nextBeatAtMs - config.watchdog.cronWakeAheadMs,
+          );
+        }
+        if (wakeCandidates.length > 0) {
+          nextWakeAtMs = Math.min(...wakeCandidates);
+        }
+
+        const wakeReason: SuspendInfo["wakeReason"] =
+          hasCronWake && hasHeartbeatWake
+            ? "cron+heartbeat"
+            : hasCronWake
+              ? "cron"
+              : hasHeartbeatWake
+                ? "heartbeat"
+                : null;
+
+        progress(
+          "wake",
+          `Wake decision: reason=${wakeReason} cronRuns=${futureRuns.length} heartbeat=${heartbeatSchedule ? `enabled=${heartbeatSchedule.enabled} nextBeat=${heartbeatSchedule.nextBeatAtMs}` : "null"} → nextWakeAtMs=${nextWakeAtMs}${nextWakeAtMs ? ` (in ${Math.round((nextWakeAtMs - now) / 1000)}s)` : " (NONE)"}`,
+        );
 
         // Step 10: Update registry
         progress("registry", "Updating registry");
@@ -184,7 +271,9 @@ export function runSuspend(
           snapshotDir,
           cronSchedules,
           nextWakeAtMs,
+          wakeReason,
           lastRxBytes,
+          heartbeatSchedule,
         };
         tenant.status = "suspended";
         tenant.vmPid = null;

@@ -97,8 +97,11 @@ export async function runWatch(
         data.idleFor !== null
           ? ` idle=${(data.idleFor / 1000).toFixed(1)}s`
           : "";
+      const conn = data.connections
+        ? `tcp=${data.connections.tcp} cron=${data.connections.cron}`
+        : "tcp=? cron=?";
       console.log(
-        `[${new Date().toISOString()}] ${data.tenant}: conn=${data.connections}${idle}`,
+        `[${new Date().toISOString()}] ${data.tenant}: ${conn}${idle}`,
       );
     });
 
@@ -107,11 +110,16 @@ export async function runWatch(
     });
 
     handle.emitter.on("suspend-complete", (data) => {
-      const wake = data.nextWakeAtMs
-        ? ` (next wake: ${new Date(data.nextWakeAtMs).toISOString()})`
-        : "";
+      const parts: string[] = [];
+      if (data.nextWakeAtMs) {
+        parts.push(`wake: ${new Date(data.nextWakeAtMs).toISOString()}`);
+      }
+      if (data.wakeReason) {
+        parts.push(`reason: ${data.wakeReason}`);
+      }
+      const detail = parts.length > 0 ? ` (${parts.join(", ")})` : "";
       console.log(
-        `[${new Date().toISOString()}] ${data.tenant}: suspended${wake}`,
+        `[${new Date().toISOString()}] ${data.tenant}: suspended${detail}`,
       );
     });
 

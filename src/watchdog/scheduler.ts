@@ -4,6 +4,7 @@ import { runSuspend } from "../commands/suspend.js";
 import { execUnchecked } from "../system/exec.js";
 import * as vsock from "../system/vsock.js";
 import type {
+  ActiveConnectionsInfo,
   LobsterdConfig,
   Tenant,
   TenantRegistry,
@@ -115,23 +116,28 @@ export function startScheduler(
     sentinels.set(tenant.name, sentinel);
   }
 
-  function scheduleCronWake(tenant: Tenant) {
+  function scheduleWake(tenant: Tenant) {
     if (!tenant.suspendInfo?.nextWakeAtMs) {
       return;
     }
     clearCronTimer(tenant.name);
 
+    // Determine trigger type from the wake reason
+    const reason = tenant.suspendInfo.wakeReason;
+    const trigger: "cron" | "heartbeat" =
+      reason === "heartbeat" ? "heartbeat" : "cron";
+
     const delay = tenant.suspendInfo.nextWakeAtMs - Date.now();
     if (delay <= 0) {
       // Already past wake time, resume immediately
-      triggerResume(tenant.name, "cron");
+      triggerResume(tenant.name, trigger);
       return;
     }
 
     const timer = setTimeout(() => {
       cronTimers.delete(tenant.name);
       if (running) {
-        triggerResume(tenant.name, "cron");
+        triggerResume(tenant.name, trigger);
       }
     }, delay);
     cronTimers.set(tenant.name, timer);
@@ -139,7 +145,7 @@ export function startScheduler(
 
   async function triggerResume(
     name: string,
-    trigger: "traffic" | "cron" | "manual",
+    trigger: "traffic" | "cron" | "heartbeat" | "manual",
   ) {
     if (!running || inFlight.has(name)) {
       return;
@@ -165,7 +171,7 @@ export function startScheduler(
         vmPid: result.value.vmPid,
       });
       clearCronTimer(name);
-      if (trigger === "cron") {
+      if (trigger === "cron" || trigger === "heartbeat") {
         // Poke cron via cron.run(mode:"due") to trigger overdue jobs and re-arm
         // the timer immediately, instead of waiting up to 60s for the stale
         // setTimeout clamp to expire after snapshot resume.
@@ -181,8 +187,8 @@ export function startScheduler(
             )
             .orElse(() => okAsync(undefined));
         }
-        // Give the cron job time to start executing (runningAtMs in jobs.json
-        // counts as an active connection and prevents re-suspend).
+        // Give the cron/heartbeat job time to execute — the idle grace
+        // window prevents immediate re-suspend.
         idleSince.set(
           name,
           Date.now() + config.watchdog.cronWakeAheadMs + 5_000,
@@ -222,11 +228,12 @@ export function startScheduler(
       emitter.emit("suspend-complete", {
         tenant: name,
         nextWakeAtMs: result.value.suspendInfo?.nextWakeAtMs ?? null,
+        wakeReason: result.value.suspendInfo?.wakeReason ?? null,
       });
       // Start sentinel for wake-on-request
       if (idx !== -1) {
         await startSentinelForTenant(registry.tenants[idx]);
-        scheduleCronWake(registry.tenants[idx]);
+        scheduleWake(registry.tenants[idx]);
       }
       idleSince.delete(name);
     } else if (result.error.code === "SUSPEND_SKIPPED") {
@@ -296,9 +303,12 @@ export function startScheduler(
         config.vsock.agentPort,
         tenant.agentToken,
       );
-      const connections = connResult.isOk() ? connResult.value : -1;
+      const info: ActiveConnectionsInfo | null = connResult.isOk()
+        ? connResult.value
+        : null;
+      const total = info ? info.tcp + info.cron : -1;
 
-      if (connections === 0) {
+      if (total === 0) {
         const now = Date.now();
         if (!idleSince.has(tenant.name)) {
           idleSince.set(tenant.name, now);
@@ -306,7 +316,7 @@ export function startScheduler(
         const elapsed = now - (idleSince.get(tenant.name) ?? now);
         emitter.emit("scheduler-poll", {
           tenant: tenant.name,
-          connections,
+          connections: info,
           idleFor: elapsed,
         });
         if (elapsed >= config.watchdog.idleThresholdMs) {
@@ -315,14 +325,14 @@ export function startScheduler(
       } else {
         emitter.emit("scheduler-poll", {
           tenant: tenant.name,
-          connections,
+          connections: info,
           idleFor: null,
         });
-        if (connections > 0) {
+        if (total > 0) {
           idleSince.delete(tenant.name);
         }
       }
-      // connections === -1 means agent unreachable, don't change idle tracking
+      // info === null means agent unreachable, don't change idle tracking
     }
   }, config.watchdog.trafficPollMs);
 
@@ -341,7 +351,7 @@ export function startScheduler(
 
       if (tenant.status === "suspended" && tenant.suspendInfo) {
         await startSentinelForTenant(tenant);
-        scheduleCronWake(tenant);
+        scheduleWake(tenant);
       }
     }
   })();
