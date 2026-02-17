@@ -205,6 +205,7 @@ export interface LobsterdConfig {
 export interface ActiveConnectionsInfo {
   tcp: number;
   cron: number;
+  hold: number;
 }
 
 // ── Guest Stats ─────────────────────────────────────────────────────────────

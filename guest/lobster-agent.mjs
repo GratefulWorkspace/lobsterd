@@ -65,6 +65,7 @@ const HEALTH_PORT = 53;
 const MAX_MESSAGE_SIZE = 1024 * 1024; // 1MB
 let gatewayProcess = null;
 let secrets = {};
+const holds = new Map(); // holdId → expiresAtMs
 
 /** Parse a key=value parameter from /proc/cmdline */
 function parseCmdlineParam(key) {
@@ -226,6 +227,10 @@ async function handleMessage(msg) {
       return await handleGetHeartbeatSchedule();
     case "get-active-connections":
       return await handleGetActiveConnections();
+    case "hold-acquire":
+      return handleHoldAcquire(msg.holdId, msg.ttlMs);
+    case "hold-release":
+      return handleHoldRelease(msg.holdId);
     case "shutdown":
       return handleShutdown();
     default:
@@ -621,6 +626,27 @@ async function handleGetHeartbeatSchedule() {
   return JSON.stringify({ enabled: true, intervalMs, nextBeatAtMs });
 }
 
+function handleHoldAcquire(holdId, ttlMs) {
+  if (typeof holdId !== "string" || !holdId) {
+    return JSON.stringify({ error: "Invalid holdId" });
+  }
+  if (typeof ttlMs !== "number" || ttlMs <= 0) {
+    return JSON.stringify({ error: "Invalid ttlMs" });
+  }
+  holds.set(holdId, Date.now() + ttlMs);
+  console.log(`[lobster-agent] Hold acquired: ${holdId} (ttl=${ttlMs}ms)`);
+  return JSON.stringify({ ok: true });
+}
+
+function handleHoldRelease(holdId) {
+  if (typeof holdId !== "string" || !holdId) {
+    return JSON.stringify({ error: "Invalid holdId" });
+  }
+  holds.delete(holdId);
+  console.log(`[lobster-agent] Hold released: ${holdId}`);
+  return JSON.stringify({ ok: true });
+}
+
 async function handleGetActiveConnections() {
   let tcp = 0;
   let cron = 0;
@@ -675,8 +701,21 @@ async function handleGetActiveConnections() {
     }
   }
 
-  console.log(`[active-connections] result: tcp=${tcp} cron=${cron}`);
-  return JSON.stringify({ tcp, cron });
+  // Count non-expired holds
+  const now = Date.now();
+  let hold = 0;
+  for (const [id, exp] of holds) {
+    if (exp > now) {
+      hold++;
+    } else {
+      holds.delete(id);
+    }
+  }
+
+  console.log(
+    `[active-connections] result: tcp=${tcp} cron=${cron} hold=${hold}`,
+  );
+  return JSON.stringify({ tcp, cron, hold });
 }
 
 function handleShutdown() {

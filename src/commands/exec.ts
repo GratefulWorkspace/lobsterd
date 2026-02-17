@@ -1,28 +1,13 @@
-import { errAsync, ResultAsync } from "neverthrow";
-import { loadRegistry } from "../config/loader.js";
+import { ResultAsync } from "neverthrow";
 import * as ssh from "../system/ssh.js";
 import type { LobsterError } from "../types/index.js";
+import { withHold } from "./hold.js";
 
 export function runExec(
   name: string,
   command?: string[],
 ): ResultAsync<number, LobsterError> {
-  return loadRegistry().andThen((registry) => {
-    const tenant = registry.tenants.find((t) => t.name === name);
-    if (!tenant) {
-      return errAsync({
-        code: "TENANT_NOT_FOUND" as const,
-        message: `Tenant "${name}" not found`,
-      });
-    }
-
-    if (tenant.status !== "active") {
-      return errAsync({
-        code: "VALIDATION_FAILED" as const,
-        message: `Tenant "${name}" is not active (status: ${tenant.status})`,
-      });
-    }
-
+  return withHold(name).andThen(({ tenant, release }) => {
     const keyPath = ssh.getPrivateKeyPath(name);
     const sshArgs = [
       "ssh",
@@ -50,12 +35,16 @@ export function runExec(
 
     return ResultAsync.fromPromise(
       (async () => {
-        const proc = Bun.spawn(sshArgs, {
-          stdin: "inherit",
-          stdout: "inherit",
-          stderr: "inherit",
-        });
-        return await proc.exited;
+        try {
+          const proc = Bun.spawn(sshArgs, {
+            stdin: "inherit",
+            stdout: "inherit",
+            stderr: "inherit",
+          });
+          return await proc.exited;
+        } finally {
+          await release();
+        }
       })(),
       (e): LobsterError => ({
         code: "EXEC_FAILED",

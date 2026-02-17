@@ -1,9 +1,9 @@
 import { render, useApp, useInput } from "ink";
 import { useEffect, useState } from "react";
-import { loadConfig, loadRegistry } from "../config/loader.js";
 import { fetchLogs } from "../system/logs.js";
 import type { Tenant } from "../types/index.js";
 import { LogStream } from "../ui/LogStream.js";
+import { withHold } from "./hold.js";
 
 function LogsApp({
   tenant,
@@ -64,28 +64,16 @@ export async function runLogs(
   name: string,
   opts: { service?: string } = {},
 ): Promise<number> {
-  const configResult = await loadConfig();
-  if (configResult.isErr()) {
-    console.error(`Error: ${configResult.error.message}`);
+  const holdResult = await withHold(name);
+  if (holdResult.isErr()) {
+    console.error(`Error: ${holdResult.error.message}`);
     return 1;
   }
-  const config = configResult.value;
+  const { tenant, config, release } = holdResult.value;
 
-  const registryResult = await loadRegistry();
-  if (registryResult.isErr()) {
-    console.error(`Error: ${registryResult.error.message}`);
-    return 1;
-  }
-
-  const tenant = registryResult.value.tenants.find((t) => t.name === name);
-  if (!tenant) {
-    console.error(`Tenant "${name}" not found`);
-    return 1;
-  }
-
-  if (!process.stdin.isTTY) {
-    // Non-TTY: single fetch and print
-    try {
+  try {
+    if (!process.stdin.isTTY) {
+      // Non-TTY: single fetch and print
       const logs = await fetchLogs(
         tenant.ipAddress,
         config.vsock.agentPort,
@@ -95,23 +83,25 @@ export async function runLogs(
       if (logs) {
         process.stdout.write(`${logs}\n`);
       }
-    } catch (e) {
-      console.error(
-        `Failed to fetch logs: ${e instanceof Error ? e.message : e}`,
-      );
-      return 1;
+      return 0;
     }
+
+    const { waitUntilExit } = render(
+      <LogsApp
+        tenant={tenant}
+        agentPort={config.vsock.agentPort}
+        service={opts.service}
+      />,
+    );
+
+    await waitUntilExit();
     return 0;
+  } catch (e) {
+    console.error(
+      `Failed to fetch logs: ${e instanceof Error ? e.message : e}`,
+    );
+    return 1;
+  } finally {
+    await release();
   }
-
-  const { waitUntilExit } = render(
-    <LogsApp
-      tenant={tenant}
-      agentPort={config.vsock.agentPort}
-      service={opts.service}
-    />,
-  );
-
-  await waitUntilExit();
-  return 0;
 }

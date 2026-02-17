@@ -51,7 +51,7 @@ const FEATURES = [
   {
     num: "02",
     name: "INTELLIGENT SUSPEND",
-    desc: "Auto-suspends idle VMs when zero active connections detected. Wake-on-request via TCP sentinel masks ~3s resume latency. Cron-aware scheduling wakes VMs 30s before scheduled jobs.",
+    desc: "Auto-suspends idle VMs, auto-resumes on demand. CLI commands hold the VM awake mid-operation. Wake-on-request via TCP sentinel masks ~3s resume latency. Cron-aware scheduling wakes VMs before scheduled jobs.",
     image: `${import.meta.env.BASE_URL}images/control-panel.jpg`,
   },
   {
@@ -141,6 +141,18 @@ const COMMANDS = [
     args: "<name>",
     desc: "SSH into tenant",
     note: "ed25519 keypair",
+  },
+  {
+    cmd: "configure",
+    args: "<name>",
+    desc: "OpenClaw config TUI",
+    note: "auto-resumes if suspended",
+  },
+  {
+    cmd: "devices",
+    args: "<name>",
+    desc: "List paired devices",
+    note: "auto-resumes if suspended",
   },
 ];
 
@@ -387,7 +399,10 @@ function Hero() {
         </div>
 
         {/* Right side — Image */}
-        <div className="lg:col-span-5 lg:self-start lg:pt-36" style={staggerX(400)}>
+        <div
+          className="lg:col-span-5 lg:self-start lg:pt-36"
+          style={staggerX(400)}
+        >
           <div className="relative border border-[#D4D4D8] p-4">
             <img
               src={`${import.meta.env.BASE_URL}images/hero-claw.jpg`}
@@ -711,7 +726,7 @@ function Commands() {
             className="text-[10px] font-bold uppercase tracking-[0.3em] text-dark/35"
             style={{ fontFamily: "'JetBrains Mono', monospace" }}
           >
-            012 Commands
+            014 Commands
           </span>
         </div>
       </div>

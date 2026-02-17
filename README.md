@@ -46,6 +46,9 @@ sudo lobsterd exec <name> -- ls /opt
 # Open the OpenClaw configuration TUI inside a tenant
 sudo lobsterd configure <name>
 
+# List paired devices for a tenant
+sudo lobsterd devices <name>
+
 # Remove a tenant
 sudo lobsterd evict <name>
 
@@ -213,8 +216,13 @@ Idle VMs can be suspended to disk via Firecracker's snapshot/restore API,
 freeing all RAM while preserving full VM state. Resume restores the VM from
 snapshot in ~3 seconds, transparently to connected clients.
 
+**Hold-based suspend inhibition** — CLI commands (`exec`, `configure`,
+`devices`, `logs`, `molt`) acquire a hold on the guest agent, preventing the
+watchdog from suspending mid-operation. If the tenant is already suspended, it
+is transparently resumed first. Holds expire after 5 minutes if the client drops.
+
 **Idle detection** — The watchdog scheduler polls each tenant's guest agent for
-active connections (both inbound and outbound). When a tenant has zero
+active connections (inbound, outbound, and holds). When a tenant has zero
 connections and no running cron jobs for longer than `idleThresholdMs` (default
 10 seconds), it is automatically suspended.
 
@@ -261,7 +269,7 @@ tuning).
 ```
 src/
   index.tsx           CLI entry point (commander)
-  commands/           init, spawn, evict, exec, suspend, resume, molt, snap, watch, tank, logs
+  commands/           init, spawn, evict, exec, configure, devices, suspend, resume, molt, snap, watch, tank, logs
   reef/               REST API server (Hono + OpenAPI)
   system/             firecracker API, networking, caddy, overlay images, agent TCP, SSH keypairs
   config/             zod schemas, defaults, JSON loader with file locking

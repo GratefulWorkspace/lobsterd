@@ -198,6 +198,7 @@ export function getActiveConnections(
       return {
         tcp: data.tcp ?? 0,
         cron: data.cron ?? 0,
+        hold: data.hold ?? 0,
       } as ActiveConnectionsInfo;
     })(),
     () => ({
@@ -303,6 +304,62 @@ export function ensureGateway(
     (e) => ({
       code: "VSOCK_CONNECT_FAILED" as const,
       message: `Failed to ensure gateway: ${e instanceof Error ? e.message : String(e)}`,
+      cause: e,
+    }),
+  );
+}
+
+export function acquireHold(
+  guestIp: string,
+  port: number,
+  agentToken: string,
+  holdId: string,
+  ttlMs: number,
+): ResultAsync<void, LobsterError> {
+  const payload = JSON.stringify({
+    type: "hold-acquire",
+    token: agentToken,
+    holdId,
+    ttlMs,
+  });
+  return ResultAsync.fromPromise(
+    (async () => {
+      const response = await tcpSend(guestIp, port, `${payload}\n`, 3000);
+      const data = JSON.parse(response.trim());
+      if (!data.ok) {
+        throw new Error(data.error ?? "hold-acquire rejected");
+      }
+    })(),
+    (e) => ({
+      code: "VSOCK_CONNECT_FAILED" as const,
+      message: `Failed to acquire hold: ${e instanceof Error ? e.message : String(e)}`,
+      cause: e,
+    }),
+  );
+}
+
+export function releaseHold(
+  guestIp: string,
+  port: number,
+  agentToken: string,
+  holdId: string,
+): ResultAsync<void, LobsterError> {
+  const payload = JSON.stringify({
+    type: "hold-release",
+    token: agentToken,
+    holdId,
+  });
+  return ResultAsync.fromPromise(
+    (async () => {
+      const response = await tcpSend(guestIp, port, `${payload}\n`, 3000);
+      const data = JSON.parse(response.trim());
+      if (!data.ok) {
+        throw new Error(data.error ?? "hold-release rejected");
+      }
+    })(),
+    (e) => ({
+      code: "VSOCK_CONNECT_FAILED" as const,
+      message: `Failed to release hold: ${e instanceof Error ? e.message : String(e)}`,
       cause: e,
     }),
   );
