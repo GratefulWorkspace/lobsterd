@@ -1,4 +1,4 @@
-![lobsterd](header.jpg)
+![lobsterd](github.jpg)
 
 # lobsterd
 
