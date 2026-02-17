@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /* ═══════════════════════════════════════════
    HOOKS
@@ -9,7 +9,9 @@ function useInView(threshold = 0.15) {
   const [inView, setInView] = useState(false);
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
+    if (!el) {
+      return;
+    }
     const obs = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
@@ -17,7 +19,7 @@ function useInView(threshold = 0.15) {
           obs.disconnect();
         }
       },
-      { threshold }
+      { threshold },
     );
     obs.observe(el);
     return () => obs.disconnect();
@@ -73,18 +75,73 @@ const FEATURES = [
 ];
 
 const COMMANDS = [
-  { cmd: "init", args: "", desc: "Initialize the host", note: "deps, Caddy, config" },
-  { cmd: "spawn", args: "<name>", desc: "Hatch a new tenant", note: "VM + overlay + TAP + SSH" },
-  { cmd: "evict", args: "<name>", desc: "Remove a tenant", note: "destroy all resources" },
-  { cmd: "molt", args: "[name]", desc: "Health-check & repair", note: "lobsters molt to grow" },
+  {
+    cmd: "init",
+    args: "",
+    desc: "Initialize the host",
+    note: "deps, Caddy, config",
+  },
+  {
+    cmd: "spawn",
+    args: "<name>",
+    desc: "Hatch a new tenant",
+    note: "VM + overlay + TAP + SSH",
+  },
+  {
+    cmd: "evict",
+    args: "<name>",
+    desc: "Remove a tenant",
+    note: "destroy all resources",
+  },
+  {
+    cmd: "molt",
+    args: "[name]",
+    desc: "Health-check & repair",
+    note: "lobsters molt to grow",
+  },
   { cmd: "tank", args: "", desc: "Live TUI dashboard", note: "aquarium view" },
-  { cmd: "watch", args: "", desc: "Watchdog daemon", note: "auto-repair state machine" },
-  { cmd: "suspend", args: "<name>", desc: "Suspend to disk", note: "cron-aware, frees RAM" },
-  { cmd: "resume", args: "<name>", desc: "Resume in ~3s", note: "transparent to clients" },
-  { cmd: "snap", args: "<name>", desc: "Snapshot overlay", note: "sparse tarball" },
-  { cmd: "logs", args: "<name>", desc: "Stream logs", note: "real-time output" },
-  { cmd: "buoy", args: "", desc: "REST API server", note: "HTTP mirror of CLI" },
-  { cmd: "exec", args: "<name>", desc: "SSH into tenant", note: "ed25519 keypair" },
+  {
+    cmd: "watch",
+    args: "",
+    desc: "Watchdog daemon",
+    note: "auto-repair state machine",
+  },
+  {
+    cmd: "suspend",
+    args: "<name>",
+    desc: "Suspend to disk",
+    note: "cron-aware, frees RAM",
+  },
+  {
+    cmd: "resume",
+    args: "<name>",
+    desc: "Resume in ~3s",
+    note: "transparent to clients",
+  },
+  {
+    cmd: "snap",
+    args: "<name>",
+    desc: "Snapshot overlay",
+    note: "sparse tarball",
+  },
+  {
+    cmd: "logs",
+    args: "<name>",
+    desc: "Stream logs",
+    note: "real-time output",
+  },
+  {
+    cmd: "buoy",
+    args: "",
+    desc: "REST API server",
+    note: "HTTP mirror of CLI",
+  },
+  {
+    cmd: "exec",
+    args: "<name>",
+    desc: "SSH into tenant",
+    note: "ed25519 keypair",
+  },
 ];
 
 const SECURITY_ITEMS = [
@@ -106,7 +163,16 @@ const ARCH_LAYERS = [
   { label: "HOST", value: "Linux + KVM" },
 ];
 
-const MARQUEE_ITEMS = ["SPAWN", "molt", "TANK", "suspend", "RESUME", "buoy", "SNAP", "evict"];
+const MARQUEE_ITEMS = [
+  "SPAWN",
+  "molt",
+  "TANK",
+  "suspend",
+  "RESUME",
+  "buoy",
+  "SNAP",
+  "evict",
+];
 
 const EXPO = "cubic-bezier(0.16, 1, 0.3, 1)";
 
@@ -117,11 +183,17 @@ const EXPO = "cubic-bezier(0.16, 1, 0.3, 1)";
 function NoiseOverlay() {
   return (
     <svg
+      aria-hidden="true"
       className="fixed inset-0 w-full h-full pointer-events-none"
       style={{ zIndex: 9999, opacity: 0.04 }}
     >
       <filter id="noise">
-        <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch" />
+        <feTurbulence
+          type="fractalNoise"
+          baseFrequency="0.65"
+          numOctaves="3"
+          stitchTiles="stitch"
+        />
       </filter>
       <rect width="100%" height="100%" filter="url(#noise)" />
     </svg>
@@ -167,6 +239,7 @@ function Header() {
         <nav className="hidden md:flex gap-8">
           {["features", "commands", "security", "architecture"].map((id) => (
             <button
+              type="button"
               key={id}
               onClick={() => scrollTo(id)}
               className="text-[10px] font-bold uppercase tracking-[0.25em] text-dark/50 hover:text-dark transition-colors duration-300 cursor-pointer"
@@ -177,7 +250,13 @@ function Header() {
         </nav>
 
         <div className="absolute left-1/2 -translate-x-1/2 flex items-baseline">
-          <span style={{ fontFamily: "'Playfair Display', serif", fontStyle: "italic" }} className="text-xl text-dark">
+          <span
+            style={{
+              fontFamily: "'Playfair Display', serif",
+              fontStyle: "italic",
+            }}
+            className="text-xl text-dark"
+          >
             lobster
           </span>
           <span className="text-xl font-black text-dark">d</span>
@@ -221,7 +300,10 @@ function Hero() {
         {/* Left side */}
         <div className="lg:col-span-7 py-16 lg:py-24">
           {/* Status pill */}
-          <div className="inline-flex items-center gap-2.5 mb-12" style={stagger(0)}>
+          <div
+            className="inline-flex items-center gap-2.5 mb-12"
+            style={stagger(0)}
+          >
             <span className="relative flex h-2 w-2">
               <span className="absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75 animate-ping" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
@@ -234,40 +316,51 @@ function Hero() {
           {/* Massive heading */}
           <div>
             <div style={stagger(100)}>
-              <span
-                className="block text-[clamp(4rem,10vw,10rem)] font-black leading-[0.85] tracking-[-0.05em] stroke-text"
-              >
+              <span className="block text-[clamp(4rem,10vw,10rem)] font-black leading-[0.85] tracking-[-0.05em] stroke-text">
                 SPAWN
               </span>
             </div>
             <div style={stagger(200)}>
               <span
                 className="block text-[clamp(4rem,10vw,10rem)] leading-[0.85] tracking-[-0.03em] text-dark"
-                style={{ fontFamily: "'Playfair Display', serif", fontStyle: "italic" }}
+                style={{
+                  fontFamily: "'Playfair Display', serif",
+                  fontStyle: "italic",
+                }}
               >
                 Isolate
               </span>
             </div>
             <div style={stagger(300)}>
-              <span
-                className="block text-[clamp(4rem,10vw,10rem)] font-black leading-[0.85] tracking-[-0.05em] stroke-text"
-              >
+              <span className="block text-[clamp(4rem,10vw,10rem)] font-black leading-[0.85] tracking-[-0.05em] stroke-text">
                 ORCHESTRATE
               </span>
             </div>
           </div>
 
           {/* Technical readout */}
-          <div className="mt-12 flex flex-wrap gap-x-6 gap-y-2" style={stagger(500)}>
-            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-dark/35" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+          <div
+            className="mt-12 flex flex-wrap gap-x-6 gap-y-2"
+            style={stagger(500)}
+          >
+            <span
+              className="text-[10px] font-bold uppercase tracking-[0.2em] text-dark/35"
+              style={{ fontFamily: "'JetBrains Mono', monospace" }}
+            >
               Firecracker MicroVM
             </span>
-            <span className="text-[10px] text-dark/15">//</span>
-            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-dark/35" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+            <span className="text-[10px] text-dark/15">{"//"}</span>
+            <span
+              className="text-[10px] font-bold uppercase tracking-[0.2em] text-dark/35"
+              style={{ fontFamily: "'JetBrains Mono', monospace" }}
+            >
               OpenClaw Gateway
             </span>
-            <span className="text-[10px] text-dark/15">//</span>
-            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-dark/35" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+            <span className="text-[10px] text-dark/15">{"//"}</span>
+            <span
+              className="text-[10px] font-bold uppercase tracking-[0.2em] text-dark/35"
+              style={{ fontFamily: "'JetBrains Mono', monospace" }}
+            >
               KVM Isolation
             </span>
           </div>
@@ -280,6 +373,7 @@ function Hero() {
             >
               Get Started
               <svg
+                aria-hidden="true"
                 className="w-4 h-4 transition-transform duration-500 ease-expo group-hover:rotate-45"
                 viewBox="0 0 16 16"
                 fill="none"
@@ -315,32 +409,75 @@ function Hero() {
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <div className="text-[9px] uppercase tracking-[0.2em] text-warm/35" style={{ fontFamily: "'JetBrains Mono', monospace" }}>Tenants</div>
+                  <div
+                    className="text-[9px] uppercase tracking-[0.2em] text-warm/35"
+                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  >
+                    Tenants
+                  </div>
                   <div className="text-xl font-black text-warm mt-1">12</div>
                 </div>
                 <div>
-                  <div className="text-[9px] uppercase tracking-[0.2em] text-warm/35" style={{ fontFamily: "'JetBrains Mono', monospace" }}>Healthy</div>
-                  <div className="text-xl font-black text-green-400 mt-1">11</div>
+                  <div
+                    className="text-[9px] uppercase tracking-[0.2em] text-warm/35"
+                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  >
+                    Healthy
+                  </div>
+                  <div className="text-xl font-black text-green-400 mt-1">
+                    11
+                  </div>
                 </div>
                 <div>
-                  <div className="text-[9px] uppercase tracking-[0.2em] text-warm/35" style={{ fontFamily: "'JetBrains Mono', monospace" }}>Suspended</div>
+                  <div
+                    className="text-[9px] uppercase tracking-[0.2em] text-warm/35"
+                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  >
+                    Suspended
+                  </div>
                   <div className="text-xl font-black text-accent mt-1">1</div>
                 </div>
               </div>
               <div className="mt-4 space-y-2">
                 <div className="flex items-center gap-3">
-                  <span className="text-[9px] uppercase tracking-[0.2em] text-warm/35 w-10" style={{ fontFamily: "'JetBrains Mono', monospace" }}>CPU</span>
+                  <span
+                    className="text-[9px] uppercase tracking-[0.2em] text-warm/35 w-10"
+                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  >
+                    CPU
+                  </span>
                   <div className="flex-1 h-[3px] bg-warm/10 overflow-hidden">
-                    <div className="h-full bg-accent" style={{ width: "34%" }} />
+                    <div
+                      className="h-full bg-accent"
+                      style={{ width: "34%" }}
+                    />
                   </div>
-                  <span className="text-[9px] text-warm/35" style={{ fontFamily: "'JetBrains Mono', monospace" }}>34%</span>
+                  <span
+                    className="text-[9px] text-warm/35"
+                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  >
+                    34%
+                  </span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="text-[9px] uppercase tracking-[0.2em] text-warm/35 w-10" style={{ fontFamily: "'JetBrains Mono', monospace" }}>MEM</span>
+                  <span
+                    className="text-[9px] uppercase tracking-[0.2em] text-warm/35 w-10"
+                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  >
+                    MEM
+                  </span>
                   <div className="flex-1 h-[3px] bg-warm/10 overflow-hidden">
-                    <div className="h-full bg-accent" style={{ width: "67%" }} />
+                    <div
+                      className="h-full bg-accent"
+                      style={{ width: "67%" }}
+                    />
                   </div>
-                  <span className="text-[9px] text-warm/35" style={{ fontFamily: "'JetBrains Mono', monospace" }}>67%</span>
+                  <span
+                    className="text-[9px] text-warm/35"
+                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  >
+                    67%
+                  </span>
                 </div>
               </div>
             </div>
@@ -360,13 +497,21 @@ function MarqueeTicker() {
     MARQUEE_ITEMS.map((item, i) => {
       const isStroke = i % 2 === 0;
       return (
-        <div key={`${offset}-${i}`} className="flex items-center gap-10 shrink-0">
+        <div
+          key={`${offset}-${i}`}
+          className="flex items-center gap-10 shrink-0"
+        >
           {isStroke ? (
-            <span className="text-7xl font-black tracking-tight stroke-text">{item}</span>
+            <span className="text-7xl font-black tracking-tight stroke-text">
+              {item}
+            </span>
           ) : (
             <span
               className="text-7xl tracking-tight text-dark"
-              style={{ fontFamily: "'Playfair Display', serif", fontStyle: "italic" }}
+              style={{
+                fontFamily: "'Playfair Display', serif",
+                fontStyle: "italic",
+              }}
             >
               {item}
             </span>
@@ -402,6 +547,7 @@ function FeatureRow({ feature, index }: { feature: Feature; index: number }) {
   const { ref, inView } = useInView(0.1);
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: hover-only visual effect, not interactive
     <div
       ref={ref}
       className="group relative border-b border-[#D4D4D8] cursor-pointer overflow-hidden"
@@ -445,7 +591,9 @@ function FeatureRow({ feature, index }: { feature: Feature; index: number }) {
               className="text-3xl lg:text-4xl font-black tracking-[-0.03em]"
               style={{
                 fontStyle: hovered ? "italic" : "normal",
-                fontFamily: hovered ? "'Playfair Display', serif" : "'Inter', sans-serif",
+                fontFamily: hovered
+                  ? "'Playfair Display', serif"
+                  : "'Inter', sans-serif",
                 fontWeight: hovered ? 400 : 900,
               }}
             >
@@ -464,7 +612,14 @@ function FeatureRow({ feature, index }: { feature: Feature; index: number }) {
               transition: `all 0.5s ${EXPO}`,
             }}
           >
-            <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <svg
+              aria-hidden="true"
+              className="w-3.5 h-3.5"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            >
               <path d="M1 15L15 1M15 1H5M15 1V11" />
             </svg>
           </div>
@@ -482,7 +637,10 @@ function Features() {
           <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-dark/35">
             Core Capabilities
           </span>
-          <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-dark/35" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+          <span
+            className="text-[10px] font-bold uppercase tracking-[0.3em] text-dark/35"
+            style={{ fontFamily: "'JetBrains Mono', monospace" }}
+          >
             005 Features
           </span>
         </div>
@@ -514,12 +672,18 @@ function Philosophy() {
       >
         <p
           className="text-[clamp(2rem,5vw,5rem)] leading-[1.1] tracking-[-0.03em] text-dark"
-          style={{ fontFamily: "'Playfair Display', serif", fontStyle: "italic" }}
+          style={{
+            fontFamily: "'Playfair Display', serif",
+            fontStyle: "italic",
+          }}
         >
           The strongest isolation is
           <br />
           the kind you{" "}
-          <span className="stroke-text-accent font-black" style={{ fontFamily: "'Inter', sans-serif", fontStyle: "normal" }}>
+          <span
+            className="stroke-text-accent font-black"
+            style={{ fontFamily: "'Inter', sans-serif", fontStyle: "normal" }}
+          >
             never
           </span>{" "}
           think about.
@@ -543,7 +707,10 @@ function Commands() {
           <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-dark/35">
             Command Line Interface
           </span>
-          <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-dark/35" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+          <span
+            className="text-[10px] font-bold uppercase tracking-[0.3em] text-dark/35"
+            style={{ fontFamily: "'JetBrains Mono', monospace" }}
+          >
             012 Commands
           </span>
         </div>
@@ -585,12 +752,25 @@ function Commands() {
                 }}
               >
                 <div className="flex items-baseline gap-2">
-                  <span className="text-accent text-sm" style={{ fontFamily: "'JetBrains Mono', monospace" }}>$</span>
-                  <span className="text-warm font-bold text-sm" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                  <span
+                    className="text-accent text-sm"
+                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  >
+                    $
+                  </span>
+                  <span
+                    className="text-warm font-bold text-sm"
+                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  >
                     lobsterd {c.cmd}
                   </span>
                   {c.args && (
-                    <span className="text-warm/35 text-sm" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{c.args}</span>
+                    <span
+                      className="text-warm/35 text-sm"
+                      style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                    >
+                      {c.args}
+                    </span>
                   )}
                 </div>
                 <div className="mt-1 flex items-baseline justify-between gap-4">
@@ -619,11 +799,17 @@ function Security() {
   const { ref, inView } = useInView(0.1);
 
   return (
-    <section id="security" className="relative border-b border-[#D4D4D8] overflow-hidden">
+    <section
+      id="security"
+      className="relative border-b border-[#D4D4D8] overflow-hidden"
+    >
       {/* Background image */}
       <div
         className="absolute inset-0 bg-cover bg-center grayscale"
-        style={{ backgroundImage: "url(/images/security-layers.png)", opacity: 0.07 }}
+        style={{
+          backgroundImage: "url(/images/security-layers.png)",
+          opacity: 0.07,
+        }}
       />
 
       <div className="relative z-10 mx-auto max-w-[1600px] px-8 py-28 lg:py-36">
@@ -631,12 +817,18 @@ function Security() {
           <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-dark/35">
             Security &amp; Research
           </span>
-          <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-dark/35" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+          <span
+            className="text-[10px] font-bold uppercase tracking-[0.3em] text-dark/35"
+            style={{ fontFamily: "'JetBrains Mono', monospace" }}
+          >
             Defense in Depth
           </span>
         </div>
 
-        <div ref={ref} className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8">
+        <div
+          ref={ref}
+          className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8"
+        >
           {/* Left — heading */}
           <div className="lg:col-span-5">
             <h2
@@ -651,8 +843,7 @@ function Security() {
             >
               Built for isolation.
               <br />
-              Hardened for{" "}
-              <span className="text-accent">research.</span>
+              Hardened for <span className="text-accent">research.</span>
             </h2>
             <p
               className="mt-8 text-sm text-dark/50 leading-relaxed max-w-md"
@@ -662,8 +853,9 @@ function Security() {
                 transition: `all 1s ${EXPO} 200ms`,
               }}
             >
-              Every VM is a hardened sandbox. Study isolation boundaries, test attack surfaces,
-              run adversarial agents safely. Enterprise-grade security meets computer security research.
+              Every VM is a hardened sandbox. Study isolation boundaries, test
+              attack surfaces, run adversarial agents safely. Enterprise-grade
+              security meets computer security research.
             </p>
           </div>
 
@@ -683,7 +875,10 @@ function Security() {
                   <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-accent">
                     {item.label}
                   </span>
-                  <p className="mt-3 text-sm text-dark/60" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                  <p
+                    className="mt-3 text-sm text-dark/60"
+                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  >
                     {item.value}
                   </p>
                 </div>
@@ -704,11 +899,17 @@ function Architecture() {
   const { ref, inView } = useInView(0.1);
 
   return (
-    <section id="architecture" className="relative border-b border-[#D4D4D8] overflow-hidden">
+    <section
+      id="architecture"
+      className="relative border-b border-[#D4D4D8] overflow-hidden"
+    >
       {/* Background */}
       <div
         className="absolute inset-0 bg-cover bg-center grayscale"
-        style={{ backgroundImage: "url(/images/lobster-traps.png)", opacity: 0.05 }}
+        style={{
+          backgroundImage: "url(/images/lobster-traps.png)",
+          opacity: 0.05,
+        }}
       />
 
       <div className="relative z-10 mx-auto max-w-[1600px] px-8 py-28 lg:py-36">
@@ -716,12 +917,18 @@ function Architecture() {
           <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-dark/35">
             Architecture
           </span>
-          <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-dark/35" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+          <span
+            className="text-[10px] font-bold uppercase tracking-[0.3em] text-dark/35"
+            style={{ fontFamily: "'JetBrains Mono', monospace" }}
+          >
             The Stack
           </span>
         </div>
 
-        <div ref={ref} className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8">
+        <div
+          ref={ref}
+          className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8"
+        >
           {/* Left */}
           <div className="lg:col-span-5">
             <h2
@@ -734,7 +941,13 @@ function Architecture() {
             >
               Seven layers.
               <br />
-              <span style={{ fontFamily: "'Playfair Display', serif", fontStyle: "italic", fontWeight: 400 }}>
+              <span
+                style={{
+                  fontFamily: "'Playfair Display', serif",
+                  fontStyle: "italic",
+                  fontWeight: 400,
+                }}
+              >
                 One command.
               </span>
             </h2>
@@ -746,9 +959,15 @@ function Architecture() {
                 transition: `all 1s ${EXPO} 200ms`,
               }}
             >
-              <code className="text-accent" style={{ fontFamily: "'JetBrains Mono', monospace" }}>lobsterd spawn my-tenant</code> provisions the entire
-              stack — from KVM host to public domain — in seconds. Overlay filesystem, TAP device, SSH keys,
-              Caddy route, OpenClaw gateway. All isolated. All automated.
+              <code
+                className="text-accent"
+                style={{ fontFamily: "'JetBrains Mono', monospace" }}
+              >
+                lobsterd spawn my-tenant
+              </code>{" "}
+              provisions the entire stack — from KVM host to public domain — in
+              seconds. Overlay filesystem, TAP device, SSH keys, Caddy route,
+              OpenClaw gateway. All isolated. All automated.
             </p>
           </div>
 
@@ -768,7 +987,10 @@ function Architecture() {
                   <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-dark/30">
                     {layer.label}
                   </span>
-                  <span className="text-sm text-dark" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                  <span
+                    className="text-sm text-dark"
+                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  >
                     {layer.value}
                   </span>
                 </div>
@@ -807,6 +1029,7 @@ function Footer() {
             View on GitHub
           </span>
           <svg
+            aria-hidden="true"
             className="w-5 h-5 lg:w-6 lg:h-6 transition-transform duration-500 ease-expo group-hover:translate-x-2"
             viewBox="0 0 16 16"
             fill="none"
@@ -818,8 +1041,9 @@ function Footer() {
         </a>
 
         <p className="mt-8 text-sm text-warm/35 max-w-lg leading-relaxed">
-          Open source microVM orchestrator for OpenClaw. Manage isolated tenants with
-          Firecracker, Caddy, and a crustacean-themed CLI that takes security seriously.
+          Open source microVM orchestrator for OpenClaw. Manage isolated tenants
+          with Firecracker, Caddy, and a crustacean-themed CLI that takes
+          security seriously.
         </p>
 
         {/* Bottom bar */}
@@ -853,7 +1077,10 @@ function Footer() {
 
 function App() {
   return (
-    <div className="relative bg-warm text-dark" style={{ fontFamily: "'Inter', sans-serif" }}>
+    <div
+      className="relative bg-warm text-dark"
+      style={{ fontFamily: "'Inter', sans-serif" }}
+    >
       <NoiseOverlay />
       <GridLines />
       <Header />
