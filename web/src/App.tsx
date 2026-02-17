@@ -392,10 +392,10 @@ function Hero() {
             <img
               src={`${import.meta.env.BASE_URL}images/hero-claw.jpg`}
               alt="Mechanical lobster claw — brushed steel and copper"
-              className="w-full aspect-[14/10] object-cover object-top grayscale"
+              className="w-full aspect-[15/10] object-cover grayscale"
             />
             {/* Glassmorphism status card */}
-            <div className="absolute bottom-7 left-7 right-7 bg-dark/50 backdrop-blur-2xl border border-white/10 p-5">
+            <div className="absolute bottom-7 left-7 right-7 bg-dark/30 backdrop-blur-xl border border-white/10 p-5 opacity-90">
               <div className="flex items-center justify-between mb-4">
                 <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-warm/50">
                   System Status
