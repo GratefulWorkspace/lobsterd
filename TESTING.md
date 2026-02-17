@@ -28,6 +28,8 @@ doctl compute droplet create ubuntu-s-1vcpu-2gb-tor1-01 \
 
 The new droplet will have a **different IP** — note it for subsequent steps.
 
+Wait ~45 seconds after creation for apt to settle on the droplet before SSHing in.
+
 ### 2. Update Cloudflare DNS to point to the new droplet
 
 The setup is: `gradeprompt.com` has an A record, and `*.gradeprompt.com` CNAMEs to it. So we only need to update the root A record.
@@ -71,28 +73,26 @@ ssh root@${HOST} "git clone https://github.com/GratefulWorkspace/lobsterd.git /r
 Edit `src/config/defaults.ts` on the droplet to disable device auth and add `models` and `agents` to the `openclaw.defaultConfig` block:
 
 ```bash
-ssh root@${HOST} "export PATH=/root/.bun/bin:\$PATH && cd /root/lobsterd && cat > /tmp/patch.js << 'SCRIPT'
-const fs = require('fs');
-const file = 'src/config/defaults.ts';
-let src = fs.readFileSync(file, 'utf8');
-src = src.replace(
-  /(auth:\s*\{\s*mode:\s*"token",?\s*\},)/s,
-  \`auth: {
-          mode: "token",
-        },
+ssh root@${HOST} 'cd /root/lobsterd && python3 << "PYEOF"
+import re, pathlib
+f = pathlib.Path("src/config/defaults.ts")
+src = f.read_text()
+src = re.sub(
+    r"(auth:\s*\{\s*mode:\s*\"token\",?\s*\},)(\s*controlUi:\s*\{[^}]*\}\s*,)?",
+    r"""\1
         controlUi: {
           dangerouslyDisableDeviceAuth: true,
         },
         models: {
           providers: {
             fireworks: {
-              baseUrl: 'https://api.fireworks.ai/inference/v1',
-              apiKey: 'fw_SM5UK6FtmAhA15UYscdTXk',
-              api: 'openai-completions',
+              baseUrl: "https://api.fireworks.ai/inference/v1",
+              apiKey: "fw_SM5UK6FtmAhA15UYscdTXk",
+              api: "openai-completions",
               models: [
                 {
-                  id: 'accounts/fireworks/models/kimi-k2p5',
-                  name: 'Kimi K2.5',
+                  id: "accounts/fireworks/models/kimi-k2p5",
+                  name: "Kimi K2.5",
                   contextWindow: 131072,
                   maxTokens: 32768,
                 },
@@ -103,60 +103,16 @@ src = src.replace(
         agents: {
           defaults: {
             model: {
-              primary: 'fireworks/accounts/fireworks/models/kimi-k2p5',
+              primary: "fireworks/accounts/fireworks/models/kimi-k2p5",
             },
           },
-        },
-      },\`
-);
-fs.writeFileSync(file, src);
-SCRIPT
-node /tmp/patch.js"
-```
-
-Or manually edit the file so the `openclaw.defaultConfig` section looks like:
-
-```typescript
-openclaw: {
-    installPath: "/opt/openclaw",
-    defaultConfig: {
-      gateway: {
-        mode: "local",
-        bind: "custom",
-        port: 9000,
-        auth: {
-          mode: "token",
-        },
-        controlUi: {
-          dangerouslyDisableDeviceAuth: true,
-        },
-        models: {
-          providers: {
-            fireworks: {
-              baseUrl: 'https://api.fireworks.ai/inference/v1',
-              apiKey: 'fw_SM5UK6FtmAhA15UYscdTXk',
-              api: 'openai-completions',
-              models: [
-                {
-                  id: 'accounts/fireworks/models/kimi-k2p5',
-                  name: 'Kimi K2.5',
-                  contextWindow: 131072,
-                  maxTokens: 32768,
-                },
-              ],
-            },
-          },
-        },
-        agents: {
-          defaults: {
-            model: {
-              primary: 'fireworks/accounts/fireworks/models/kimi-k2p5',
-            },
-          },
-        },
-      },
-    },
-  },
+        },""",
+    src,
+    flags=re.DOTALL,
+)
+f.write_text(src)
+print("Patched successfully")
+PYEOF'
 ```
 
 ### 6. Install dependencies and run lobsterd init
@@ -177,4 +133,3 @@ ssh root@${HOST} "export PATH=/root/.bun/bin:\$PATH && cd /root/lobsterd && bun 
 ssh root@${HOST} "export PATH=/root/.bun/bin:\$PATH && cd /root/lobsterd && bun run ./src/index.tsx spawn tenant1"
 ```
 
-Wait ~45 seconds after spawn for apt to settle inside the VM before running any further commands.
