@@ -201,6 +201,22 @@ program
     process.exit(result.value);
   });
 
+// ── devices ─────────────────────────────────────────────────────────────────
+
+program
+  .command("devices <name>")
+  .description("List paired devices for a tenant")
+  .action(async (name: string) => {
+    const result = await runExec(name, ["openclaw", "devices"]);
+
+    if (result.isErr()) {
+      console.error(`\n✗ ${result.error.message}`);
+      process.exit(1);
+    }
+
+    process.exit(result.value);
+  });
+
 // ── suspend ──────────────────────────────────────────────────────────────────
 
 program
