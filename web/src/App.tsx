@@ -56,7 +56,7 @@ const FEATURES = [
     num: "03",
     name: "SELF-HEALING WATCHDOG",
     desc: "State machine monitors every 10s: VM process, agent responsiveness, TAP device, gateway status, Caddy routes. Auto-repairs with configurable cooldowns and escalation paths.",
-    image: "/images/control-panel.png",
+    image: "/images/watchdog-gauges.png",
   },
   {
     num: "04",
@@ -68,7 +68,7 @@ const FEATURES = [
     num: "05",
     name: "REST API",
     desc: "Full HTTP API mirroring every CLI command. Bearer token auth, auto-generated OpenAPI 3.1 spec. Spawn, evict, molt, snap — all available over HTTP.",
-    image: "/images/server-room.png",
+    image: "/images/buoy-beacon.png",
   },
 ];
 
