@@ -52,13 +52,50 @@ export async function runWatch(
     console.error(`Error: ${registryResult.error.message}`);
     return 1;
   }
-  const registry = registryResult.value;
+  let registry = registryResult.value;
 
   if (registry.tenants.length === 0) {
+    if (!opts.daemon) {
+      console.log(
+        "No tenants registered. Use `lobster spawn <name>` to add one.",
+      );
+      return 0;
+    }
+
+    // Daemon mode: wait for tenants to appear
     console.log(
-      "No tenants registered. Use `lobster spawn <name>` to add one.",
+      `[${new Date().toISOString()}] No tenants registered, waiting...`,
     );
-    return 0;
+    let stopped = false;
+    const onSignal = () => {
+      stopped = true;
+    };
+    process.on("SIGINT", onSignal);
+    process.on("SIGTERM", onSignal);
+
+    while (!stopped) {
+      await new Promise((resolve) =>
+        setTimeout(resolve, config.watchdog.intervalMs),
+      );
+      if (stopped) {
+        break;
+      }
+      const recheck = await loadRegistry();
+      if (recheck.isErr()) {
+        continue;
+      }
+      if (recheck.value.tenants.length > 0) {
+        registry = recheck.value;
+        break;
+      }
+    }
+
+    process.off("SIGINT", onSignal);
+    process.off("SIGTERM", onSignal);
+
+    if (stopped) {
+      return 0;
+    }
   }
 
   const handle = startWatchdog(config, registry);

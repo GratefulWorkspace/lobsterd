@@ -177,6 +177,12 @@ export function InitFlow({ preflight: pre, config }: Props) {
             <Text>
               Caddy: <Text color="green">configured</Text>
             </Text>
+            <Text>
+              Watchdog:{" "}
+              <Text color={result.servicesEnabled ? "green" : "yellow"}>
+                {result.servicesEnabled ? "service enabled" : "not configured"}
+              </Text>
+            </Text>
           </Box>
           {pre.warnings.length > 0 && (
             <Box flexDirection="column" marginTop={1}>

@@ -3,6 +3,7 @@ import { CONFIG_DIR, LOBSTERD_BASE } from "../config/defaults.js";
 import { loadRegistry } from "../config/loader.js";
 import { exec } from "../system/exec.js";
 import * as network from "../system/network.js";
+import * as systemd from "../system/systemd.js";
 import type { LobsterError } from "../types/index.js";
 
 export interface UninitProgress {
@@ -29,19 +30,26 @@ export function runUninit(
       return okAsync(undefined);
     })
     .andThen(() => {
-      // Step 2: Flush and remove iptables chains
+      // Step 2: Stop and remove watchdog service
+      progress("services", "Stopping lobsterd-watch service");
+      return systemd
+        .stopAndRemoveService("lobsterd-watch")
+        .orElse(() => okAsync(undefined));
+    })
+    .andThen(() => {
+      // Step 3: Flush and remove iptables chains
       progress("iptables", "Flushing LOBSTER iptables chains");
       return network.flushAndRemoveChains().orElse(() => okAsync(undefined));
     })
     .andThen(() => {
-      // Step 3: Remove /var/lib/lobsterd/
+      // Step 4: Remove /var/lib/lobsterd/
       progress("data", `Removing ${LOBSTERD_BASE}`);
       return exec(["rm", "-rf", LOBSTERD_BASE])
         .map(() => undefined)
         .orElse(() => okAsync(undefined));
     })
     .andThen(() => {
-      // Step 4: Remove /etc/lobsterd/
+      // Step 5: Remove /etc/lobsterd/
       progress("config", `Removing ${CONFIG_DIR}`);
       return exec(["rm", "-rf", CONFIG_DIR])
         .map(() => undefined)
