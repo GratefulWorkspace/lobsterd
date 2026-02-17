@@ -112,19 +112,12 @@ export const cronScheduleInfoSchema = z.object({
     .optional(),
 });
 
-export const heartbeatScheduleInfoSchema = z.object({
-  enabled: z.boolean(),
-  intervalMs: z.number().int().min(0),
-  nextBeatAtMs: z.number().int().min(0),
-});
-
 export const suspendInfoSchema = z.object({
   suspendedAt: z.string().datetime(),
   snapshotDir: z.string().min(1),
   cronSchedules: z.array(cronScheduleInfoSchema),
   nextWakeAtMs: z.number().int().nullable(),
   lastRxBytes: z.number().int().min(0),
-  heartbeatSchedule: heartbeatScheduleInfoSchema.nullable().optional(),
 });
 
 export const tenantSchema = z.object({

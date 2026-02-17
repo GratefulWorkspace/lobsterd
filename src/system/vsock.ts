@@ -1,10 +1,8 @@
 import { Socket } from "node:net";
 import { ResultAsync } from "neverthrow";
 import type {
-  ActiveConnectionsInfo,
   CronScheduleInfo,
   GuestStats,
-  HeartbeatScheduleInfo,
   LobsterError,
 } from "../types/index.js";
 
@@ -186,7 +184,7 @@ export function getActiveConnections(
   guestIp: string,
   port: number,
   agentToken: string,
-): ResultAsync<ActiveConnectionsInfo, LobsterError> {
+): ResultAsync<number, LobsterError> {
   const payload = JSON.stringify({
     type: "get-active-connections",
     token: agentToken,
@@ -195,11 +193,7 @@ export function getActiveConnections(
     (async () => {
       const response = await tcpSend(guestIp, port, `${payload}\n`, 3000);
       const data = JSON.parse(response.trim());
-      return {
-        tcp: data.tcp ?? 0,
-        cron: data.cron ?? 0,
-        heartbeat: data.heartbeat ?? 0,
-      } as ActiveConnectionsInfo;
+      return (data.activeConnections ?? 0) as number;
     })(),
     () => ({
       code: "VSOCK_CONNECT_FAILED" as const,
@@ -254,56 +248,6 @@ export function pokeCron(
     (e) => ({
       code: "VSOCK_CONNECT_FAILED" as const,
       message: `Failed to poke cron: ${e instanceof Error ? e.message : String(e)}`,
-      cause: e,
-    }),
-  );
-}
-
-export function getHeartbeatSchedule(
-  guestIp: string,
-  port: number,
-  agentToken: string,
-): ResultAsync<HeartbeatScheduleInfo | null, LobsterError> {
-  const payload = JSON.stringify({
-    type: "get-heartbeat-schedule",
-    token: agentToken,
-  });
-  return ResultAsync.fromPromise(
-    (async () => {
-      const response = await tcpSend(guestIp, port, `${payload}\n`, 10_000);
-      const data = JSON.parse(response.trim());
-      if (!data.enabled) {
-        return null;
-      }
-      return data as HeartbeatScheduleInfo;
-    })(),
-    () => ({
-      code: "VSOCK_CONNECT_FAILED" as const,
-      message: `Heartbeat schedule request failed for ${guestIp}`,
-    }),
-  );
-}
-
-export function pokeHeartbeat(
-  guestIp: string,
-  port: number,
-  agentToken: string,
-): ResultAsync<void, LobsterError> {
-  const payload = JSON.stringify({
-    type: "poke-heartbeat",
-    token: agentToken,
-  });
-  return ResultAsync.fromPromise(
-    (async () => {
-      const response = await tcpSend(guestIp, port, `${payload}\n`, 15_000);
-      const data = JSON.parse(response.trim());
-      if (data.error) {
-        throw new Error(data.error);
-      }
-    })(),
-    (e) => ({
-      code: "VSOCK_CONNECT_FAILED" as const,
-      message: `Failed to poke heartbeat: ${e instanceof Error ? e.message : String(e)}`,
       cause: e,
     }),
   );

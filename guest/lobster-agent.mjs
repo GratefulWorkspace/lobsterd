@@ -11,7 +11,6 @@ import {
   mkdirSync,
   openSync,
   readFileSync,
-  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { createServer } from "node:net";
@@ -223,10 +222,6 @@ async function handleMessage(msg) {
       return await handlePokeCron();
     case "ensure-gateway":
       return handleLaunchOpenclaw();
-    case "get-heartbeat-schedule":
-      return await handleGetHeartbeatSchedule();
-    case "poke-heartbeat":
-      return await handlePokeHeartbeat();
     case "get-active-connections":
       return handleGetActiveConnections();
     case "shutdown":
@@ -533,178 +528,11 @@ function gatewayRpc(token, method, params) {
   });
 }
 
-/** Parse duration string like "30m", "2h", "90s" to milliseconds */
-function parseDurationMs(s) {
-  const match = s.match(/^(\d+(?:\.\d+)?)\s*(s|m|h)$/);
-  if (!match) {
-    return null;
-  }
-  const value = parseFloat(match[1]);
-  const unit = match[2];
-  const multipliers = { s: 1_000, m: 60_000, h: 3_600_000 };
-  return Math.round(value * multipliers[unit]);
-}
-
-/** Track active heartbeat poll interval so we can clear it */
-let heartbeatPollInterval = null;
-let heartbeatSafetyTimeout = null;
-
-async function handleGetHeartbeatSchedule() {
-  const token = secrets.OPENCLAW_GATEWAY_TOKEN;
-  if (!token || !gatewayProcess) {
-    return JSON.stringify({ enabled: false, intervalMs: 0, nextBeatAtMs: 0 });
-  }
-
-  // Read heartbeat interval from OpenClaw config
-  let intervalMs = 0;
+function handleGetActiveConnections() {
   try {
-    const cfg = JSON.parse(
-      readFileSync("/root/.openclaw/openclaw.json", "utf-8"),
-    );
-    const every = cfg?.agents?.defaults?.heartbeat?.every;
-    if (typeof every === "string") {
-      intervalMs = parseDurationMs(every) || 0;
-    }
-  } catch {
-    // No config or no heartbeat setting
-  }
-
-  if (intervalMs <= 0) {
-    console.log(`[heartbeat-schedule] disabled (intervalMs=0)`);
-    return JSON.stringify({ enabled: false, intervalMs: 0, nextBeatAtMs: 0 });
-  }
-
-  console.log(`[heartbeat-schedule] enabled intervalMs=${intervalMs}`);
-
-  // Get last heartbeat timestamp from gateway (short timeout — if the
-  // gateway is busy we fall back to now + intervalMs which is fine)
-  let lastTs = 0;
-  try {
-    const result = await Promise.race([
-      gatewayRpc(token, "last-heartbeat", {}),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("fast timeout")), 3000),
-      ),
-    ]);
-    if (result.ok && result.data?.ts) {
-      lastTs = result.data.ts;
-    }
-    console.log(`[heartbeat-schedule] RPC ok=${result.ok} lastTs=${lastTs}`);
-  } catch (e) {
-    console.log(`[heartbeat-schedule] RPC failed: ${e.message}`);
-  }
-
-  const now = Date.now();
-  const nextBeatAtMs = lastTs > 0 ? lastTs + intervalMs : now + intervalMs;
-
-  console.log(`[heartbeat-schedule] returning enabled=true nextBeatAtMs=${nextBeatAtMs} (in ${Math.round((nextBeatAtMs - now) / 1000)}s)`);
-  return JSON.stringify({ enabled: true, intervalMs, nextBeatAtMs });
-}
-
-async function handlePokeHeartbeat() {
-  const token = secrets.OPENCLAW_GATEWAY_TOKEN;
-  if (!token || !gatewayProcess) {
-    return JSON.stringify({ error: "Gateway not running" });
-  }
-
-  // Read heartbeat interval from config
-  let intervalMs = 0;
-  try {
-    const cfg = JSON.parse(
-      readFileSync("/root/.openclaw/openclaw.json", "utf-8"),
-    );
-    const every = cfg?.agents?.defaults?.heartbeat?.every;
-    if (typeof every === "string") {
-      intervalMs = parseDurationMs(every) || 0;
-    }
-  } catch {}
-
-  if (intervalMs <= 0) {
-    return JSON.stringify({ ok: true, monitoring: false });
-  }
-
-  // Get last heartbeat timestamp
-  let baselineTs = 0;
-  try {
-    const result = await gatewayRpc(token, "last-heartbeat", {});
-    if (result.ok && result.data?.ts) {
-      baselineTs = result.data.ts;
-    }
-  } catch (e) {
-    console.log(`[poke-heartbeat] RPC failed: ${e.message}`);
-    return JSON.stringify({ ok: true, monitoring: false });
-  }
-
-  // Check if heartbeat is due
-  const now = Date.now();
-  if (baselineTs > 0 && baselineTs + intervalMs > now) {
-    console.log(
-      `[poke-heartbeat] Not due yet (next in ${Math.round((baselineTs + intervalMs - now) / 1000)}s)`,
-    );
-    return JSON.stringify({ ok: true, monitoring: false });
-  }
-
-  // Heartbeat is due — write marker and start polling
-  console.log(
-    "[poke-heartbeat] Heartbeat is due, writing marker and starting poll",
-  );
-  const startedAtMs = now;
-  writeFileSync(
-    "/tmp/heartbeat-active",
-    JSON.stringify({ startedAtMs, baselineTs }),
-  );
-
-  // Clear any previous poll/timeout
-  if (heartbeatPollInterval) {
-    clearInterval(heartbeatPollInterval);
-  }
-  if (heartbeatSafetyTimeout) {
-    clearTimeout(heartbeatSafetyTimeout);
-  }
-
-  // Poll last-heartbeat every 10s to detect completion
-  heartbeatPollInterval = setInterval(async () => {
-    try {
-      const result = await gatewayRpc(token, "last-heartbeat", {});
-      if (result.ok && result.data?.ts && result.data.ts > baselineTs) {
-        console.log("[poke-heartbeat] Heartbeat completed, removing marker");
-        clearInterval(heartbeatPollInterval);
-        heartbeatPollInterval = null;
-        clearTimeout(heartbeatSafetyTimeout);
-        heartbeatSafetyTimeout = null;
-        try {
-          unlinkSync("/tmp/heartbeat-active");
-        } catch {}
-      }
-    } catch (e) {
-      console.log(`[poke-heartbeat] Poll failed: ${e.message}`);
-    }
-  }, 10_000);
-
-  // Safety timeout: 90 seconds (matches active-connections check cap)
-  heartbeatSafetyTimeout = setTimeout(() => {
-    console.log("[poke-heartbeat] Safety timeout reached, removing marker");
-    if (heartbeatPollInterval) {
-      clearInterval(heartbeatPollInterval);
-      heartbeatPollInterval = null;
-    }
-    heartbeatSafetyTimeout = null;
-    try {
-      unlinkSync("/tmp/heartbeat-active");
-    } catch {}
-  }, 90_000);
-
-  return JSON.stringify({ ok: true, monitoring: true });
-}
-
-async function handleGetActiveConnections() {
-  let tcp = 0;
-  let cron = 0;
-  let heartbeat = 0;
-
-  try {
-    const procTcp = readFileSync("/proc/net/tcp", "utf-8");
-    const lines = procTcp.trim().split("\n").slice(1); // skip header
+    const tcp = readFileSync("/proc/net/tcp", "utf-8");
+    const lines = tcp.trim().split("\n").slice(1); // skip header
+    let count = 0;
     const GATEWAY_PORT = 0x2328; // 9000
     for (const line of lines) {
       const parts = line.trim().split(/\s+/);
@@ -721,22 +549,17 @@ async function handleGetActiveConnections() {
       // This ignores outbound API calls, SSH, agent ports, and internal traffic.
       const localPort = parseInt(localAddr.split(":")[1], 16);
       if (localPort === GATEWAY_PORT) {
-        tcp++;
+        count++;
       }
     }
-  } catch {
-    // /proc/net/tcp unreadable — leave tcp as 0
-  }
 
-  // Check for running cron jobs via gateway RPC (in-memory state tracks
-  // runningAtMs even though jobs.json on disk does not).
-  const token = secrets.OPENCLAW_GATEWAY_TOKEN;
-  if (token && gatewayProcess) {
+    // Also check for running cron jobs — if any job has runningAtMs set,
+    // the gateway is actively executing work even without inbound connections.
     try {
-      const result = await gatewayRpc(token, "cron.list", {});
-      if (result.ok) {
-        const jobs = result.data?.jobs ?? [];
-        const running = jobs.some(
+      const raw = readFileSync("/root/.openclaw/cron/jobs.json", "utf-8");
+      const data = JSON.parse(raw);
+      if (data.version === 1 && Array.isArray(data.jobs)) {
+        const running = data.jobs.some(
           (j) =>
             j.enabled !== false &&
             j.state &&
@@ -744,29 +567,17 @@ async function handleGetActiveConnections() {
             j.state.runningAtMs > 0,
         );
         if (running) {
-          cron = 1;
+          count++;
         }
       }
     } catch {
-      // RPC failed — leave cron as 0
+      // No cron jobs file — ignore
     }
-  }
 
-  // Check for active heartbeat execution
-  try {
-    const raw = readFileSync("/tmp/heartbeat-active", "utf-8");
-    const data = JSON.parse(raw);
-    if (
-      typeof data.startedAtMs === "number" &&
-      Date.now() - data.startedAtMs < 90_000
-    ) {
-      heartbeat = 1;
-    }
+    return JSON.stringify({ activeConnections: count });
   } catch {
-    // No heartbeat marker — ignore
+    return JSON.stringify({ activeConnections: 0 });
   }
-
-  return JSON.stringify({ tcp, cron, heartbeat });
 }
 
 function handleShutdown() {

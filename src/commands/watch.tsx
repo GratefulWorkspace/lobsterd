@@ -97,11 +97,8 @@ export async function runWatch(
         data.idleFor !== null
           ? ` idle=${(data.idleFor / 1000).toFixed(1)}s`
           : "";
-      const conn = data.connections
-        ? `tcp=${data.connections.tcp} cron=${data.connections.cron} hb=${data.connections.heartbeat}`
-        : "tcp=? cron=? hb=?";
       console.log(
-        `[${new Date().toISOString()}] ${data.tenant}: ${conn}${idle}`,
+        `[${new Date().toISOString()}] ${data.tenant}: conn=${data.connections}${idle}`,
       );
     });
 

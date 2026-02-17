@@ -4,7 +4,6 @@ import { runSuspend } from "../commands/suspend.js";
 import { execUnchecked } from "../system/exec.js";
 import * as vsock from "../system/vsock.js";
 import type {
-  ActiveConnectionsInfo,
   LobsterdConfig,
   Tenant,
   TenantRegistry,
@@ -182,22 +181,8 @@ export function startScheduler(
             )
             .orElse(() => okAsync(undefined));
         }
-        // Also poke heartbeat — writes marker if heartbeat is due,
-        // preventing re-suspend during execution.
-        const tenantRef = registry.tenants[idx];
-        if (tenantRef) {
-          await vsock
-            .pokeHeartbeat(
-              tenantRef.ipAddress,
-              config.vsock.agentPort,
-              tenantRef.agentToken,
-            )
-            .orElse(() => okAsync(undefined));
-        }
-
-        // Give the cron/heartbeat job time to start executing (runningAtMs
-        // in jobs.json or /tmp/heartbeat-active counts as an active
-        // connection and prevents re-suspend).
+        // Give the cron job time to start executing (runningAtMs in jobs.json
+        // counts as an active connection and prevents re-suspend).
         idleSince.set(
           name,
           Date.now() + config.watchdog.cronWakeAheadMs + 5_000,
@@ -311,12 +296,9 @@ export function startScheduler(
         config.vsock.agentPort,
         tenant.agentToken,
       );
-      const info: ActiveConnectionsInfo | null = connResult.isOk()
-        ? connResult.value
-        : null;
-      const total = info ? info.tcp + info.cron + info.heartbeat : -1;
+      const connections = connResult.isOk() ? connResult.value : -1;
 
-      if (total === 0) {
+      if (connections === 0) {
         const now = Date.now();
         if (!idleSince.has(tenant.name)) {
           idleSince.set(tenant.name, now);
@@ -324,7 +306,7 @@ export function startScheduler(
         const elapsed = now - (idleSince.get(tenant.name) ?? now);
         emitter.emit("scheduler-poll", {
           tenant: tenant.name,
-          connections: info,
+          connections,
           idleFor: elapsed,
         });
         if (elapsed >= config.watchdog.idleThresholdMs) {
@@ -333,14 +315,14 @@ export function startScheduler(
       } else {
         emitter.emit("scheduler-poll", {
           tenant: tenant.name,
-          connections: info,
+          connections,
           idleFor: null,
         });
-        if (total > 0) {
+        if (connections > 0) {
           idleSince.delete(tenant.name);
         }
       }
-      // info === null means agent unreachable, don't change idle tracking
+      // connections === -1 means agent unreachable, don't change idle tracking
     }
   }, config.watchdog.trafficPollMs);
 
