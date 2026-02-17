@@ -923,7 +923,7 @@ function Architecture() {
         className="absolute inset-0 bg-cover bg-center grayscale"
         style={{
           backgroundImage: `url(${import.meta.env.BASE_URL}images/lobster-traps.jpg)`,
-          opacity: 0.05,
+          opacity: 0.1,
         }}
       />
 
