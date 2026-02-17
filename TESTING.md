@@ -95,7 +95,7 @@ src = src.replace(
         providers: {
           fireworks: {
             baseUrl: "https://api.fireworks.ai/inference/v1",
-            apiKey: "fw_SM5UK6FtmAhA15UYscdTXk",
+            apiKey: "fw_DejMZ1oxWrQpY7akwJDJAh",
             api: "openai-completions",
             models: [
               {
