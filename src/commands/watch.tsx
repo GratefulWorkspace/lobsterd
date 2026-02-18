@@ -98,12 +98,14 @@ export async function runWatch(
     }
   }
 
-  const handle = startWatchdog(config, registry);
+  const inFlight = new Set<string>();
+  const handle = startWatchdog(config, registry, inFlight);
   const scheduler = startScheduler(
     config,
     registry,
     handle.emitter,
     handle.states,
+    inFlight,
   );
 
   if (opts.daemon) {

@@ -18,6 +18,7 @@ export interface WatchdogHandle {
 export function startWatchdog(
   config: LobsterdConfig,
   registry: TenantRegistry,
+  inFlight: Set<string>,
 ): WatchdogHandle {
   const emitter = new WatchdogEmitter();
   const tenantStates: Record<string, TenantWatchState> = {};
@@ -41,12 +42,37 @@ export function startWatchdog(
       const freshResult = await loadRegistry();
       if (freshResult.isOk()) {
         const fresh = freshResult.value;
+
+        // Update existing tenants from disk
         for (const freshTenant of fresh.tenants) {
+          if (inFlight.has(freshTenant.name)) {
+            continue;
+          }
           const idx = registry.tenants.findIndex(
             (t) => t.name === freshTenant.name,
           );
           if (idx !== -1) {
             Object.assign(registry.tenants[idx], freshTenant);
+          }
+        }
+
+        // Add newly spawned tenants
+        for (const freshTenant of fresh.tenants) {
+          if (!registry.tenants.some((t) => t.name === freshTenant.name)) {
+            registry.tenants.push(freshTenant);
+            tenantStates[freshTenant.name] = initialWatchState();
+          }
+        }
+
+        // Remove evicted tenants (skip in-flight)
+        for (let i = registry.tenants.length - 1; i >= 0; i--) {
+          const name = registry.tenants[i].name;
+          if (inFlight.has(name)) {
+            continue;
+          }
+          if (!fresh.tenants.some((t) => t.name === name)) {
+            registry.tenants.splice(i, 1);
+            delete tenantStates[name];
           }
         }
       }
@@ -55,7 +81,7 @@ export function startWatchdog(
         if (!running) {
           break;
         }
-        if (tenant.status === "removing") {
+        if (tenant.status === "removing" || inFlight.has(tenant.name)) {
           continue;
         }
         if (tenant.status === "suspended") {

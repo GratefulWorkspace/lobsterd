@@ -88,7 +88,10 @@ program
       );
       const response = await new Promise<string>((resolve) => {
         process.stdin.setEncoding("utf8");
-        process.stdin.once("data", (data) => resolve(data.toString().trim()));
+        process.stdin.once("data", (data) => {
+          process.stdin.pause();
+          resolve(data.toString().trim());
+        });
         process.stdin.resume();
       });
       if (response.toLowerCase() !== "y") {
@@ -146,7 +149,10 @@ program
       );
       const response = await new Promise<string>((resolve) => {
         process.stdin.setEncoding("utf8");
-        process.stdin.once("data", (data) => resolve(data.toString().trim()));
+        process.stdin.once("data", (data) => {
+          process.stdin.pause();
+          resolve(data.toString().trim());
+        });
         process.stdin.resume();
       });
       if (response.toLowerCase() !== "y") {
