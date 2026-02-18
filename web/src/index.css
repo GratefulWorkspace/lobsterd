@@ -36,9 +36,6 @@
   animation: marquee-scroll 20s linear infinite;
 }
 
-.animate-marquee:hover {
-  animation-play-state: paused;
-}
 
 /* Feature rows on mobile */
 @media (max-width: 1023px) {

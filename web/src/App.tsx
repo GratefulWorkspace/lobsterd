@@ -564,7 +564,7 @@ function FeatureRow({ feature, index }: { feature: Feature; index: number }) {
     // biome-ignore lint/a11y/noStaticElementInteractions: hover-only visual effect, not interactive
     <div
       ref={ref}
-      className="group relative border-b border-[#D4D4D8] cursor-pointer overflow-hidden"
+      className="group relative border-b border-[#D4D4D8] overflow-hidden"
       style={{
         height: 280,
         opacity: inView ? 1 : 0,
