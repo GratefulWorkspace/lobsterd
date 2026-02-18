@@ -78,6 +78,7 @@ export function startScheduler(
   registry: TenantRegistry,
   emitter: WatchdogEmitter,
   getStates: () => Record<string, TenantWatchState>,
+  inFlight: Set<string>,
 ): SchedulerHandle {
   let running = true;
 
@@ -87,8 +88,6 @@ export function startScheduler(
   const cronTimers = new Map<string, ReturnType<typeof setTimeout>>();
   // Track sentinel listeners for suspended tenants
   const sentinels = new Map<string, SentinelHandle>();
-  // Track in-flight operations to prevent races
-  const inFlight = new Set<string>();
 
   function clearCronTimer(name: string) {
     const timer = cronTimers.get(name);

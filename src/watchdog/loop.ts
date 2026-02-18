@@ -18,6 +18,7 @@ export interface WatchdogHandle {
 export function startWatchdog(
   config: LobsterdConfig,
   registry: TenantRegistry,
+  inFlight: Set<string>,
 ): WatchdogHandle {
   const emitter = new WatchdogEmitter();
   const tenantStates: Record<string, TenantWatchState> = {};
@@ -42,6 +43,9 @@ export function startWatchdog(
       if (freshResult.isOk()) {
         const fresh = freshResult.value;
         for (const freshTenant of fresh.tenants) {
+          if (inFlight.has(freshTenant.name)) {
+            continue;
+          }
           const idx = registry.tenants.findIndex(
             (t) => t.name === freshTenant.name,
           );
@@ -55,7 +59,7 @@ export function startWatchdog(
         if (!running) {
           break;
         }
-        if (tenant.status === "removing") {
+        if (tenant.status === "removing" || inFlight.has(tenant.name)) {
           continue;
         }
         if (tenant.status === "suspended") {
