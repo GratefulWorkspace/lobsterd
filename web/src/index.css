@@ -36,7 +36,6 @@
   animation: marquee-scroll 20s linear infinite;
 }
 
-
 /* Feature rows on mobile */
 @media (max-width: 1023px) {
   .feature-image-reveal {
