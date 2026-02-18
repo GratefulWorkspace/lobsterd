@@ -310,7 +310,7 @@ function Hero() {
     <section ref={ref} className="min-h-screen pt-20 border-b border-[#D4D4D8]">
       <div className="mx-auto max-w-[1600px] px-8 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center min-h-[calc(100vh-80px)]">
         {/* Left side */}
-        <div className="lg:col-span-7 py-16 lg:py-24">
+        <div className="lg:col-span-7 py-16 lg:py-24 relative z-10">
           {/* Status pill */}
           <div
             className="inline-flex items-center gap-2.5 mb-12"
@@ -617,26 +617,6 @@ function FeatureRow({ feature, index }: { feature: Feature; index: number }) {
             <p className="mt-3 text-sm text-dark/50 max-w-xl leading-relaxed feature-desc">
               {feature.desc}
             </p>
-          </div>
-          {/* View circle */}
-          <div
-            className="w-14 h-14 rounded-full border border-dark flex items-center justify-center shrink-0 hidden lg:flex"
-            style={{
-              opacity: hovered ? 1 : 0,
-              transform: hovered ? "scale(1)" : "scale(0.5)",
-              transition: `all 0.5s ${EXPO}`,
-            }}
-          >
-            <svg
-              aria-hidden="true"
-              className="w-3.5 h-3.5"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            >
-              <path d="M1 15L15 1M15 1H5M15 1V11" />
-            </svg>
           </div>
         </div>
       </div>
