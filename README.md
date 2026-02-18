@@ -2,7 +2,7 @@
 
 # lobsterd
 
-[**tsconfigdotjson.github.io/lobsterd**](https://tsconfigdotjson.github.io/lobsterd/)
+**Web explainer:** [tsconfigdotjson.github.io/lobsterd](https://tsconfigdotjson.github.io/lobsterd/)
 
 Firecracker MicroVM Tenant Orchestrator. Spawns lightweight VMs with isolated
 networking, per-tenant overlay filesystems, and an OpenClaw gateway in each guest.
