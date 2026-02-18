@@ -4,7 +4,7 @@ import { render } from "ink";
 import { runEvict } from "./commands/evict.js";
 import { runExec } from "./commands/exec.js";
 import { preflight, runInit } from "./commands/init.js";
-import { runLogs } from "./commands/logs.js";
+import { runLogs, runWatchdogLogs } from "./commands/logs.js";
 import { runMolt } from "./commands/molt.js";
 import { runResume } from "./commands/resume.js";
 import { runSnap } from "./commands/snap.js";
@@ -338,13 +338,27 @@ program
 // ── logs ──────────────────────────────────────────────────────────────────────
 
 program
-  .command("logs <name>")
-  .description("Stream tenant logs")
+  .command("logs [name]")
+  .description("Stream tenant or watchdog logs")
   .option("-s, --service <service>", "Service to stream logs for")
-  .action(async (name: string, opts: { service?: string }) => {
-    const code = await runLogs(name, opts);
-    process.exit(code);
-  });
+  .option("-w, --watchdog", "Stream watchdog service logs (journalctl)")
+  .action(
+    async (
+      name: string | undefined,
+      opts: { service?: string; watchdog?: boolean },
+    ) => {
+      if (opts.watchdog) {
+        const code = await runWatchdogLogs();
+        process.exit(code);
+      }
+      if (!name) {
+        console.error("Error: tenant name required (or use --watchdog)");
+        process.exit(1);
+      }
+      const code = await runLogs(name, opts);
+      process.exit(code);
+    },
+  );
 
 // ── token ─────────────────────────────────────────────────────────────────────
 

@@ -30,6 +30,7 @@ This creates:
 - `/var/lib/lobsterd/overlays/` -- per-tenant overlay images
 - `/var/lib/lobsterd/snapshots/` -- suspend/resume VM snapshots
 - `/var/lib/lobsterd/sockets/` -- Firecracker API sockets
+- `lobsterd-watch.service` -- systemd service for the watchdog daemon
 
 ## Usage
 
@@ -55,7 +56,7 @@ sudo lobsterd evict <name>
 # Health-check and repair tenants
 sudo lobsterd molt [name]
 
-# Start the watchdog daemon
+# Start the watchdog daemon (auto-started by init as a systemd service)
 sudo lobsterd watch [-d]
 
 # TUI dashboard (IP, PID, memory, health)
@@ -76,12 +77,34 @@ sudo lobsterd resume <name>
 # Stream tenant logs
 sudo lobsterd logs <name>
 
+# Stream watchdog service logs
+sudo lobsterd logs --watchdog
+
 # Snapshot a tenant's overlay
 sudo lobsterd snap <name>
 
 # Start the REST API server
 sudo lobsterd buoy
 ```
+
+## Watchdog service
+
+`init` installs and enables a systemd service (`lobsterd-watch`) that runs the
+watchdog daemon automatically. The service starts immediately and survives
+reboots. If no tenants are registered yet, it idles until one is spawned.
+
+```bash
+# Check service status
+systemctl status lobsterd-watch
+
+# Stream watchdog logs
+sudo lobsterd logs --watchdog
+
+# Or use journalctl directly
+journalctl -u lobsterd-watch -f
+```
+
+`uninit` stops and removes the service automatically.
 
 ## REST API (buoy)
 

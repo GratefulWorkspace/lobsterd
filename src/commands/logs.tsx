@@ -5,6 +5,23 @@ import type { Tenant } from "../types/index.js";
 import { LogStream } from "../ui/LogStream.js";
 import { withHold } from "./hold.js";
 
+export async function runWatchdogLogs(): Promise<number> {
+  const proc = Bun.spawn(
+    ["journalctl", "-u", "lobsterd-watch", "-f", "-n", "100", "--no-pager"],
+    {
+      stdout: "inherit",
+      stderr: "inherit",
+      stdin: "inherit",
+    },
+  );
+
+  process.on("SIGINT", () => proc.kill());
+  process.on("SIGTERM", () => proc.kill());
+
+  await proc.exited;
+  return 0;
+}
+
 function LogsApp({
   tenant,
   agentPort,

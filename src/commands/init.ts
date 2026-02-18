@@ -24,6 +24,7 @@ import {
 import * as caddy from "../system/caddy.js";
 import { exec, execUnchecked } from "../system/exec.js";
 import * as network from "../system/network.js";
+import * as systemd from "../system/systemd.js";
 import type { LobsterdConfig, LobsterError } from "../types/index.js";
 
 // ── types ───────────────────────────────────────────────────────────────────
@@ -376,6 +377,7 @@ export interface InitResult {
   ipForwardingEnabled: boolean;
   caddyInstalled: boolean;
   caddyConfigured: boolean;
+  servicesEnabled: boolean;
   warnings: string[];
 }
 
@@ -399,6 +401,7 @@ export function runInit(
     ipForwardingEnabled: false,
     caddyInstalled: false,
     caddyConfigured: false,
+    servicesEnabled: false,
     warnings: [],
   };
 
@@ -503,8 +506,18 @@ export function runInit(
         config.caddy.tls,
       ),
     )
-    .map(() => {
+    .andThen(() => {
       result.caddyConfigured = true;
-      return result;
-    });
+      const bunPath = process.execPath;
+      const entryPoint = new URL("../index.tsx", import.meta.url).pathname;
+      const unitContent = systemd.generateWatchUnit(bunPath, entryPoint);
+      return systemd
+        .installService("lobsterd-watch", unitContent)
+        .andThen(() => systemd.enableAndStartService("lobsterd-watch"))
+        .map(() => {
+          result.servicesEnabled = true;
+          return undefined;
+        });
+    })
+    .map(() => result);
 }

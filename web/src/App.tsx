@@ -128,7 +128,7 @@ const COMMANDS = [
     cmd: "logs",
     args: "<name>",
     desc: "Stream logs",
-    note: "real-time output",
+    note: "tenant or --watchdog",
   },
   {
     cmd: "buoy",
